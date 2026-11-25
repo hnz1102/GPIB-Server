@@ -1,0 +1,21 @@
+/.vscode
+/.embuild
+/target
+/Cargo.lock
+
+# Downloaded by setup_components.sh / ESP-IDF tooling (not part of this repo)
+/components/wolfssh/
+/components/wolfssl/
+/esp-idf/
+
+# Local configuration with credentials — copy cfg.toml.example to cfg.toml
+/cfg.toml
+/cfg.toml.tmp
+/cfg.toml.*
+!/cfg.toml.example
+
+# Third-party datasheets
+/*.pdf
+
+# Build output (embeds cfg.toml credentials) — build with build-flash-images.sh
+/flash_images/*.bin

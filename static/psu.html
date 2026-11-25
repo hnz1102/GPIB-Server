@@ -1,0 +1,624 @@
+<!DOCTYPE html><html lang="ja"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title data-ja="GPIB 直流電源">GPIB DC Power Supply</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#111827;color:#e2e8f0;font-family:'Segoe UI',Arial,sans-serif;min-height:100vh;display:flex;flex-direction:column}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 14px;background:#1e2d45;border-bottom:1px solid #243b55}
+.toolbar h1{font-size:1em;color:#fbbf24;margin-right:auto;letter-spacing:.05em}
+.toolbar h1 small{color:#94a3b8;font-weight:400;margin-left:8px;font-size:.8em}
+label{font-size:.8em;color:#94a3b8;display:flex;align-items:center;gap:5px}
+input[type=number],select{padding:5px 6px;background:#0f172a;border:1px solid #2d4a6a;border-radius:6px;color:#e2e8f0;font-size:.95em}
+input[type=number]{width:96px;font-family:Consolas,monospace}
+#addr{width:52px}
+button,.btn{padding:6px 12px;border-radius:6px;border:1px solid #2d4a6a;background:#0f172a;color:#e2e8f0;font-size:.85em;cursor:pointer;text-decoration:none;font-weight:600;user-select:none}
+button:hover,.btn:hover{filter:brightness(1.25)}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.45;cursor:default;filter:none}
+.status{font-size:.78em;padding:3px 10px;border-radius:12px;font-weight:700}
+.ok{background:#14532d;color:#4ade80}.off{background:#4c0519;color:#fb7185}.warn{background:#451a03;color:#fb923c}
+main{flex:1;display:grid;grid-template-columns:minmax(330px,1.15fr) minmax(300px,1fr);gap:12px;padding:12px;align-content:start}
+@media (max-width:820px){main{grid-template-columns:1fr}}
+.card{background:#1a2438;border:1px solid #243b55;border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.card h2{font-size:.78em;color:#94a3b8;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
+.span2{grid-column:1/-1}
+/* readout */
+.lcd{background:#06101e;border:1px solid #2d4a6a;border-radius:8px;padding:10px 14px;display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:baseline}
+.lcd .v{font-family:Consolas,'DejaVu Sans Mono',monospace;font-size:2.6em;font-weight:700;text-align:right;line-height:1.15}
+.lcd .u{font-size:1.1em;color:#94a3b8;font-weight:600;min-width:2.2em}
+#mv{color:#4ade80}#mi{color:#fbbf24}#mp{color:#93c5fd;font-size:1.5em}
+.lcd.dim .v{opacity:.35}
+.badges{display:flex;flex-wrap:wrap;gap:6px}
+.bd{font-size:.75em;font-weight:700;padding:3px 9px;border-radius:5px;background:#0f172a;color:#475569;border:1px solid #243b55;letter-spacing:.05em}
+.bd.on{background:#14532d;color:#4ade80;border-color:#16a34a}
+.bd.cc.on{background:#451a03;color:#fbbf24;border-color:#d97706}
+.bd.bad.on{background:#7f1d1d;color:#fecaca;border-color:#f87171}
+.outrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+#btn-out{font-size:1.15em;padding:10px 22px;min-width:170px;border-width:2px}
+#btn-out.on{background:#166534;border-color:#4ade80;color:#dcfce7}
+#btn-out.offs{background:#1f2937;border-color:#64748b;color:#cbd5e1}
+#btn-clr.alert{background:#991b1b;border-color:#f87171;animation:pulse 1.2s infinite}
+@keyframes pulse{50%{filter:brightness(1.5)}}
+/* settings */
+.set{display:grid;grid-template-columns:7.5em 1fr;gap:8px 10px;align-items:center}
+.set .nm{font-size:.85em;color:#cbd5e1}
+.set .nm small{display:block;color:#64748b;font-size:.85em}
+.ctl{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.ctl .cur{font-family:Consolas,monospace;color:#7dd3fc;font-size:.9em;min-width:6.5em}
+.ctl button{padding:5px 8px;min-width:2.3em}
+.ctl .apply{background:#1e3a5f;border-color:#3b82f6}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.hint{font-size:.75em;color:#64748b}
+/* trend */
+#trend{width:100%;height:240px;background:#06101e;border:1px solid #2d4a6a;border-radius:8px;display:block}
+#log{font-family:Consolas,monospace;font-size:.78em;color:#fca5a5;max-height:7.5em;overflow-y:auto;white-space:pre-wrap}
+#log:empty::before{content:'—';color:#475569}
+.mem{display:grid;grid-template-columns:auto repeat(4,1fr);gap:6px;align-items:center}
+.mem span{font-size:.8em;color:#94a3b8}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+/* active setting (target of keypad / jog dial) */
+.set .nm,.set .cur{cursor:pointer}
+.set .nm.act{color:#fbbf24}
+.ctl.act .cur{color:#fbbf24;text-decoration:underline;text-underline-offset:3px}
+/* data entry */
+.de{display:flex;gap:12px;align-items:stretch;flex-wrap:wrap}
+.entry{flex:1;min-width:190px;background:#06101e;border:1px solid #2d4a6a;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:3px;cursor:ns-resize}
+.entry .name{font-size:.72em;color:#94a3b8;letter-spacing:.08em;text-transform:uppercase}
+.entry .val{font-size:1.35em;color:#7dd3fc;font-weight:700;font-family:Consolas,monospace}
+.entry .inp{font-size:1.2em;color:#fbbf24;font-family:Consolas,monospace;min-height:1.3em}
+.entry .inp:not(:empty)::after{content:'_';animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+.entry .stp{font-size:.75em;color:#64748b;margin-top:auto}
+.knob{width:112px;display:flex;flex-direction:column;align-items:center;gap:4px}
+#knob{width:112px;height:112px;cursor:grab;touch-action:none}
+#knob:active{cursor:grabbing}
+.knob span{font-size:.62em;color:#64748b;letter-spacing:.08em}
+.pad{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.pad button{padding:11px 0;font-size:1.05em;font-family:Consolas,monospace}
+.pad .unit{background:#3b2a63;border-color:#7c3aed;font-size:.85em}
+.pad .fn{background:#24324a;font-size:.85em}
+.pad .ent{background:#1e3a5f;border-color:#3b82f6;font-size:.85em}
+.selk{display:flex;gap:6px;flex-wrap:wrap}
+.selk button{flex:1;font-size:.8em;padding:6px 4px}
+.selk button.act{background:#78350f;border-color:#fbbf24;color:#fde68a}
+</style></head><body>
+<div class="toolbar">
+  <h1>&#x1F50B; <span data-ja="直流電源">DC Power Supply</span><small id="idn">—</small></h1>
+  <label data-help="GPIB address of the power supply (0-30).&#10;Must match the address set on the instrument (6612B: Address key)." data-help-ja="電源の GPIB アドレス（0〜30）。&#10;本体の設定と合わせてください（6612B: Address キー）。">ADDR <input id="addr" type="number" min="0" max="30" value="{{ADDR}}"></label>
+  <label data-help="How often the output is measured (MEAS:VOLT? / MEAS:CURR?).&#10;Pause stops all polling so the front panel can be used (press Local)." data-help-ja="出力の測定周期（MEAS:VOLT? / MEAS:CURR?）。&#10;一時停止にするとポーリングを止めます（本体パネル操作時は Local も押してください）。"><span data-ja="更新">Update</span>
+    <select id="rate"><option value="500">0.5 s</option><option value="1000" selected>1 s</option><option value="2000">2 s</option><option value="5000">5 s</option><option value="0" data-ja="一時停止">Pause</option></select></label>
+  <span id="conn" class="status off" data-ja="未接続">Disconnected</span>
+  <button id="btn-local" data-help="Go To Local: return the instrument to front-panel operation.&#10;The next poll puts it back into remote, so set Update to Pause first." data-help-ja="Go To Local: 本体のフロントパネル操作に戻します。&#10;次の問い合わせで再びリモートになるため、先に「更新」を一時停止にしてください。">Local</button>
+  <span id="lang-slot"></span>
+  <a href="/" class="btn" style="background:#374151;border-color:#4b5563" data-ja="&#x2190; メインメニュー">&#x2190; Main menu</a>
+</div>
+<main>
+ <div class="col">
+  <section class="card">
+    <h2 data-ja="出力（実測）">Output (measured)</h2>
+    <div class="lcd" id="lcd">
+      <div class="v" id="mv">--.---</div><div class="u">V</div>
+      <div class="v" id="mi">-.----</div><div class="u" id="miu">A</div>
+      <div class="v" id="mp">--.--</div><div class="u">W</div>
+    </div>
+    <div class="badges">
+      <span class="bd" id="b-cv" data-help="Constant voltage (STAT:OPER:COND bit 8)" data-help-ja="定電圧動作（STAT:OPER:COND bit 8）">CV</span>
+      <span class="bd cc" id="b-cc" data-help="Constant current: the load reached the current limit (bit 10/11)" data-help-ja="定電流動作: 負荷電流が電流制限値に達しています（bit 10/11）">CC</span>
+      <span class="bd bad" id="b-ov" data-help="Over-voltage protection tripped (STAT:QUES:COND bit 0)" data-help-ja="過電圧保護が動作（STAT:QUES:COND bit 0）">OV</span>
+      <span class="bd bad" id="b-ocp" data-help="Over-current protection tripped (bit 1)" data-help-ja="過電流保護が動作（bit 1）">OCP</span>
+      <span class="bd bad" id="b-ot" data-help="Over-temperature protection tripped (bit 4)" data-help-ja="過熱保護が動作（bit 4）">OT</span>
+      <span class="bd bad" id="b-fs" data-help="Fuse blown (bit 2)" data-help-ja="ヒューズ断（bit 2）">FS</span>
+      <span class="bd bad" id="b-ri" data-help="Remote inhibit active (bit 9)" data-help-ja="リモートインヒビット有効（bit 9）">RI</span>
+      <span class="bd bad" id="b-unr" data-help="Output unregulated (bit 10)" data-help-ja="出力が非安定化状態（bit 10）">UNREG</span>
+      <span class="bd bad" id="b-ovl" data-help="Current measurement exceeds the low range (bit 14): select Auto range" data-help-ja="電流測定が Low レンジを超えています（bit 14）: レンジを Auto に">OVLD</span>
+    </div>
+    <div class="outrow">
+      <button id="btn-out" class="offs" data-help="Switch the output on / off (OUTP ON|OFF)." data-help-ja="出力をオン / オフします（OUTP ON|OFF）。">OUTPUT OFF</button>
+      <button id="btn-clr" data-help="Clear the protection latch (OUTP:PROT:CLE) after removing the cause.&#10;The output returns to its state before the fault." data-help-ja="保護ラッチを解除します（OUTP:PROT:CLE）。原因を取り除いてから実行してください。&#10;出力は保護動作前の状態に戻ります。"><span data-ja="保護解除">Clear protection</span></button>
+    </div>
+  </section>
+
+  <section class="card" id="decard">
+    <h2 data-ja="データ入力">Data entry</h2>
+    <div class="selk" id="selk">
+      <button data-a="v" data-ja="電圧">Voltage</button><button data-a="i" data-ja="電流制限">Current</button><button data-a="ovp">OVP</button><button data-a="dly" data-ja="保護遅延">Delay</button>
+    </div>
+    <div class="de">
+      <div class="entry" id="entry" data-help="Active setting. Type a value with the keypad (or the keyboard: 0-9 . Enter Esc Backspace),&#10;or turn the jog dial / mouse wheel here (↑ ↓ keys too). Shift = 10 × step." data-help-ja="アクティブな設定項目。テンキー（キーボードの 0-9 . Enter Esc BS も可）で値を入力するか、&#10;ジョグダイアル / ここでマウスホイール（↑ ↓ キーも可）で増減します。Shift で刻み × 10。">
+        <div class="name" id="ename">—</div>
+        <div class="val" id="eval">—</div>
+        <div class="inp" id="einp"></div>
+        <div class="stp"><label><span data-ja="刻み">Step</span> <select id="step"></select></label></div>
+      </div>
+      <div class="knob"><canvas id="knob" width="224" height="224" data-help="Jog dial: drag around it or use the mouse wheel to change the active setting by the step.&#10;Shift = 10 × step. The value is sent at most about 7 times per second." data-help-ja="ジョグダイアル: ドラッグで回すかマウスホイールで、アクティブ項目を刻みずつ増減します。&#10;Shift で刻み × 10。値の送信は最大でおよそ毎秒 7 回です。"></canvas><span data-ja="ジョグダイアル">JOG DIAL</span></div>
+    </div>
+    <div class="pad" id="pad">
+      <button>7</button><button>8</button><button>9</button><button class="fn" data-f="bs">&#x232B;</button><button class="fn" data-f="esc">ESC</button>
+      <button>4</button><button>5</button><button>6</button><button class="fn" data-f="dn">&#x25BC;</button><button class="fn" data-f="up">&#x25B2;</button>
+      <button>1</button><button>2</button><button>3</button><button class="unit" data-f="milli" id="k-milli">mV</button><button class="unit" data-f="base" id="k-base">V</button>
+      <button>0</button><button>.</button><button class="fn" data-f="half" data-help="Step ÷ 10" data-help-ja="刻みを 1/10 に">&#x00F7;10</button><button class="fn" data-f="dbl" data-help="Step × 10" data-help-ja="刻みを 10 倍に">&#x00D7;10</button><button class="ent" data-f="base">ENT</button>
+    </div>
+  </section>
+ </div>
+
+ <div class="col">
+  <section class="card">
+    <h2 data-ja="設定">Settings</h2>
+    <div class="set">
+      <div class="nm" data-ja="電圧<small>VOLT</small>">Voltage<small>VOLT</small></div>
+      <div class="ctl" data-k="v"><span class="cur" id="sv">—</span><input type="number" id="iv" step="0.001" min="0"><button class="apply" data-ja="設定">Set</button><button data-d="-1">&minus;</button><button data-d="1">+</button></div>
+      <div class="nm" data-ja="電流制限<small>CURR</small>">Current limit<small>CURR</small></div>
+      <div class="ctl" data-k="i"><span class="cur" id="si">—</span><input type="number" id="ii" step="0.0001" min="0"><button class="apply" data-ja="設定">Set</button><button data-d="-1">&minus;</button><button data-d="1">+</button></div>
+      <div class="nm" data-ja="過電圧保護<small>VOLT:PROT</small>">OVP level<small>VOLT:PROT</small></div>
+      <div class="ctl" data-k="ovp"><span class="cur" id="sovp">—</span><input type="number" id="iovp" step="0.01" min="0"><button class="apply" data-ja="設定">Set</button></div>
+      <div class="nm" data-ja="過電流保護<small>CURR:PROT:STAT</small>">OCP<small>CURR:PROT:STAT</small></div>
+      <div class="ctl"><label data-help="Over-current protection: when ON, entering CC mode turns the output off (after the protection delay)." data-help-ja="過電流保護: ON のとき、CC 動作になると（保護遅延の後）出力をオフにします。"><input type="checkbox" id="ocp"> <span data-ja="CC で出力オフ">Output off on CC</span></label></div>
+      <div class="nm" data-ja="保護遅延<small>OUTP:PROT:DEL</small>">Prot. delay<small>OUTP:PROT:DEL</small></div>
+      <div class="ctl" data-k="dly"><span class="cur" id="sdly">—</span><input type="number" id="idly" step="0.01" min="0"><button class="apply" data-ja="設定">Set</button></div>
+    </div>
+    <div class="row"><span class="hint" data-ja="項目名をクリックするとテンキー / ジョグダイアルの対象になります。−/+ は各項目の刻み。">Click a name to make it the keypad / jog dial target. − / + use its step.</span><span class="hint" id="lim"></span></div>
+  </section>
+
+  <section class="card">
+    <h2 data-ja="測定">Measurement</h2>
+    <div class="row">
+      <label data-help="Current measurement range (SENS:CURR:RANG).&#10;Auto/High: up to full scale. Low: 0-20 mA with higher resolution." data-help-ja="電流測定レンジ（SENS:CURR:RANG）。&#10;High: フルスケールまで。Low: 0〜20 mA（高分解能）。"><span data-ja="電流レンジ">Current range</span>
+        <select id="rng"><option value="MAX">High</option><option value="MIN">Low 20 mA</option></select></label>
+    </div>
+    <div class="row">
+      <label data-help="Samples per measurement (SENS:SWE:POIN, *RST 2048)." data-help-ja="1 回の測定のサンプル数（SENS:SWE:POIN、*RST 2048）。"><span data-ja="点数">Points</span>
+        <select id="pts"><option>256</option><option>512</option><option>1024</option><option>2048</option><option>4096</option></select></label>
+      <label data-help="Sample interval (SENS:SWE:TINT, 15.6 µs minimum).&#10;Measurement time = points × interval." data-help-ja="サンプル間隔（SENS:SWE:TINT、最小 15.6 µs）。&#10;測定時間 = 点数 × 間隔。"><span data-ja="間隔">Interval</span>
+        <select id="tint"><option value="1.56E-05">15.6 µs</option><option value="3.12E-05">31.2 µs</option><option value="6.24E-05">62.4 µs</option><option value="0.000156">156 µs</option></select></label>
+      <span class="hint" id="mtime"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 data-ja="状態メモリ">State memory</h2>
+    <div class="mem">
+      <span data-ja="保存">Save</span><button data-sav="0">0</button><button data-sav="1">1</button><button data-sav="2">2</button><button data-sav="3">3</button>
+      <span data-ja="呼出">Recall</span><button data-rcl="0">0</button><button data-rcl="1">1</button><button data-rcl="2">2</button><button data-rcl="3">3</button>
+    </div>
+    <div class="row">
+      <button id="btn-rst" data-help="*RST: output off, 0 V, current 10 % of max, OCP off." data-help-ja="*RST: 出力オフ、0 V、電流は最大の 10 %、OCP オフ。"><span data-ja="リセット (*RST)">Reset (*RST)</span></button>
+      <button id="btn-cls" data-help="*CLS: clear the status event registers and the error queue." data-help-ja="*CLS: ステータスのイベントレジスタとエラーキューをクリアします。"><span data-ja="ステータス消去 (*CLS)">Clear status (*CLS)</span></button>
+    </div>
+    <div><div class="hint" data-ja="エラー（SYST:ERR?）">Errors (SYST:ERR?)</div><div id="log"></div></div>
+  </section>
+ </div>
+
+  <section class="card span2">
+    <div class="row"><h2 style="margin-right:auto" data-ja="トレンド">Trend</h2>
+      <label><span data-ja="表示範囲">Span</span> <select id="tspan"><option value="60">1 min</option><option value="300" selected>5 min</option><option value="1800">30 min</option><option value="0" data-ja="全部">All</option></select></label>
+      <button id="btn-csv" data-help="Download all recorded measurements as CSV (time, V, A, W, mode)." data-help-ja="記録したすべての測定値を CSV でダウンロードします（時刻、V、A、W、モード）。">&#x1F4BE; CSV</button>
+      <button id="btn-tclr" data-ja="消去">Clear</button></div>
+    <canvas id="trend"></canvas>
+    <div class="hint" id="tinfo"></div>
+  </section>
+</main>
+<script>
+const TOKEN = '{{TOKEN}}';
+const $ = id => document.getElementById(id);
+let ws = null;   // sessionDead: declared by the session script (SESSION_JS)
+let inflight = null, inflightAt = 0, reqNo = 0, pollTimer = 0, lastPoll = 0, pollCount = 0;
+const TAB = Math.random().toString(36).slice(2, 7);
+let pendingCmds = [];          // commands waiting for the next request
+let wantSettings = true, wantIdn = true, needOnce = true;
+const st = {};                 // last query replies
+let lim = {v: 20.475, i: 2.0475, ovp: 22};
+const hist = [];               // {t, v, i, mode}
+const HIST_MAX = 50000;
+let okSeen = false;
+
+const Q_POLL = ['MEAS:VOLT?', 'MEAS:CURR?', 'STAT:OPER:COND?', 'STAT:QUES:COND?', 'OUTP?', 'SYST:ERR?'];
+const Q_SET = ['VOLT?', 'CURR?', 'VOLT:PROT?', 'CURR:PROT:STAT?', 'OUTP:PROT:DEL?', 'SENS:CURR:RANG?', 'SENS:SWE:POIN?', 'SENS:SWE:TINT?'];
+const Q_IDN = ['*IDN?', 'VOLT? MAX', 'CURR? MAX', 'VOLT:PROT? MAX'];
+
+try { const r = localStorage.getItem('psuRate'); if (r !== null) $('rate').value = r; } catch (e) {}
+
+// ── WebSocket ───────────────────────────────────────────────────────────────
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(proto + '//' + location.host + '/ws/inst');
+  ws.onopen = () => { inflight = null; wantIdn = wantSettings = needOnce = true; setConn('ws'); schedule(0); };
+  ws.onclose = () => {
+    setConn(sessionDead ? 'dead' : 'close');
+    if (!sessionDead) setTimeout(connect, 2000);
+  };
+  ws.onmessage = ev => { if (typeof ev.data === 'string') onText(JSON.parse(ev.data)); };
+}
+function setConn(s) {
+  const c = $('conn');
+  const m = {ws: [tr('Connecting…', '接続中…'), 'warn'], ok: [tr('Connected', '接続'), 'ok'],
+             nr: [tr('No response', '応答なし'), 'off'], close: [tr('WS disconnected', 'WS 未接続'), 'off'],
+             dead: [tr('Session expired', 'セッション無効'), 'off'], pause: [tr('Paused', '一時停止'), 'warn']}[s];
+  c.textContent = m[0]; c.className = 'status ' + m[1];
+}
+function addr() { return Math.max(0, Math.min(30, parseInt($('addr').value, 10) || 0)); }
+
+// One request at a time: commands first, then the queries, all in order.
+function request() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  if (inflight && Date.now() - inflightAt < 5000) return;
+  const rate = +$('rate').value;
+  if (!(rate > 0 || pendingCmds.length || needOnce)) return;
+  // The firmware accepts at most 24 items per request.
+  const qs = (wantIdn ? Q_IDN : []).concat(wantSettings || pendingCmds.length ? Q_SET : [],
+                                          pollCount % 10 === 0 ? ['*ESR?'] : [], Q_POLL);
+  const items = pendingCmds.splice(0, 24 - qs.length).concat(qs);
+  wantIdn = wantSettings = needOnce = false;
+  inflight = 'r' + (++reqNo) + TAB; inflightAt = Date.now(); lastPoll = inflightAt; pollCount++;
+  ws.send(JSON.stringify({cmd: 'req', dev: 'psu', token: TOKEN, addr: addr(), id: inflight, q: items.join('|')}));
+}
+function schedule(ms) { clearTimeout(pollTimer); pollTimer = setTimeout(tick, ms); }
+function tick() {
+  const rate = +$('rate').value;
+  if (pendingCmds.length || needOnce) request();
+  else if (rate > 0 && Date.now() - lastPoll >= rate - 20) request();
+  if (rate === 0 && !inflight && !pendingCmds.length) setConn('pause');
+  schedule(inflight ? 200 : (rate > 0 ? Math.max(50, rate - (Date.now() - lastPoll)) : 300));
+}
+function cmd(...c) { pendingCmds.push(...c); wantSettings = true; if (!inflight) schedule(0); }
+
+function onText(m) {
+  if (m.type === 'auth') { sessionExpired(); if (ws) ws.close(); return; }
+  if (m.type === 'error' && m.dev && m.dev !== 'psu') return;
+  if (m.type === 'error') { logErr(m.msg); if (inflight) { inflight = null; schedule(0); } return; }
+  if (m.type !== 'psu') return;
+  if (m.addr !== addr()) return;
+  for (const k in m.vals) st[k] = String(m.vals[k]).trim();
+  if (m.err) {
+    setConn('nr'); okSeen = false; wantIdn = true;
+    logErr(m.err);
+  } else {
+    okSeen = true; setConn(+$('rate').value === 0 ? 'pause' : 'ok');
+  }
+  if (m.id === inflight) { inflight = null; schedule(0); }
+  render(m.vals, !m.err);
+}
+
+// ── Rendering ───────────────────────────────────────────────────────────────
+function num(k) { const x = parseFloat(st[k]); return isFinite(x) ? x : NaN; }
+function fmtV(x) { return isNaN(x) ? '--.---' : x.toFixed(Math.abs(x) < 10 ? 4 : 3); }
+function fmtI(x, low) {
+  if (isNaN(x)) return ['-.----', 'A'];
+  if (low || Math.abs(x) < 0.02) return [(x * 1000).toFixed(low ? 4 : 3), 'mA'];
+  return [x.toFixed(4), 'A'];
+}
+function badge(id, on) { $(id).classList.toggle('on', !!on); }
+let lastErrs = [];
+let lastErrMsg = '', lastErrAt = 0;
+function logErr(s) {
+  if (s === '') return;
+  if (s === lastErrMsg && Date.now() - lastErrAt < 5000) return;   // jog dial: no repeats
+  lastErrMsg = s; lastErrAt = Date.now();
+  lastErrs.push(new Date().toLocaleTimeString() + '  ' + s);
+  if (lastErrs.length > 30) lastErrs.shift();
+  $('log').textContent = lastErrs.join('\n'); $('log').scrollTop = 1e9;
+}
+function render(vals, ok) {
+  // limits from the model (VOLT? MAX etc.)
+  if ('VOLT? MAX' in vals && isFinite(num('VOLT? MAX'))) lim.v = num('VOLT? MAX');
+  if ('CURR? MAX' in vals && isFinite(num('CURR? MAX'))) lim.i = num('CURR? MAX');
+  if ('VOLT:PROT? MAX' in vals && isFinite(num('VOLT:PROT? MAX'))) lim.ovp = num('VOLT:PROT? MAX');
+  if ('*IDN?' in vals) {
+    const p = st['*IDN?'].split(',');
+    $('idn').textContent = p.length >= 2 ? (p[0].trim() + ' ' + p[1].trim() + (p[3] ? '  fw ' + p[3].trim() : '')) : st['*IDN?'];
+    $('lim').textContent = tr('Max: ', '最大: ') + lim.v + ' V / ' + lim.i + ' A, OVP ' + lim.ovp + ' V';
+  }
+  if ('SYST:ERR?' in vals) {
+    const e = st['SYST:ERR?'];
+    if (e && !/^\+?0\s*,/.test(e)) logErr(e);
+  }
+  const low = num('SENS:CURR:RANG?') <= 0.021;
+  const out = st['OUTP?'] === '1';
+  const oper = num('STAT:OPER:COND?') | 0, ques = num('STAT:QUES:COND?') | 0;
+  if ('MEAS:VOLT?' in vals) {
+    const v = num('MEAS:VOLT?'), i = num('MEAS:CURR?');
+    $('mv').textContent = fmtV(v);
+    const [is, iu] = fmtI(i, low); $('mi').textContent = is; $('miu').textContent = iu;
+    $('mp').textContent = isNaN(v) || isNaN(i) ? '--.--' : (v * i).toFixed(3);
+    $('lcd').classList.toggle('dim', !out);
+    const mode = !out ? 'OFF' : (oper & 0xC00) ? 'CC' : (oper & 0x100) ? 'CV' : (ques & 0x400) ? 'UNREG' : '';
+    if (ok && !isNaN(v)) { hist.push({t: Date.now(), v, i, mode}); if (hist.length > HIST_MAX) hist.splice(0, hist.length - HIST_MAX); drawTrend(); }
+  }
+  badge('b-cv', out && (oper & 0x100)); badge('b-cc', out && (oper & 0xC00));
+  badge('b-ov', ques & 1); badge('b-ocp', ques & 2); badge('b-fs', ques & 4); badge('b-ot', ques & 16);
+  badge('b-ri', ques & 512); badge('b-unr', out && (ques & 1024)); badge('b-ovl', ques & 16384);
+  $('btn-clr').classList.toggle('alert', !!(ques & 0x217));
+  const b = $('btn-out');
+  b.textContent = out ? 'OUTPUT ON' : 'OUTPUT OFF'; b.className = out ? 'on' : 'offs';
+  // settings
+  setCur('sv', 'iv', num('VOLT?'), x => x.toFixed(4) + ' V');
+  setCur('si', 'ii', num('CURR?'), x => (x < 0.1 ? (x * 1000).toFixed(2) + ' mA' : x.toFixed(4) + ' A'));
+  setCur('sovp', 'iovp', num('VOLT:PROT?'), x => x.toFixed(3) + ' V');
+  setCur('sdly', 'idly', num('OUTP:PROT:DEL?'), x => x.toFixed(3) + ' s');
+  if ('CURR:PROT:STAT?' in vals) $('ocp').checked = st['CURR:PROT:STAT?'] === '1';
+  if ('SENS:CURR:RANG?' in vals && document.activeElement !== $('rng')) $('rng').value = low ? 'MIN' : 'MAX';
+  if ('SENS:SWE:POIN?' in vals && document.activeElement !== $('pts')) selNear('pts', num('SENS:SWE:POIN?'));
+  if ('SENS:SWE:TINT?' in vals && document.activeElement !== $('tint')) selNear('tint', num('SENS:SWE:TINT?'));
+  const mt = num('SENS:SWE:POIN?') * num('SENS:SWE:TINT?');
+  $('mtime').textContent = isFinite(mt) ? tr('Measurement time ', '測定時間 ') + (mt * 1000).toFixed(1) + ' ms' : '';
+  renderEntry();
+}
+function selNear(id, x) {
+  if (!isFinite(x)) return;
+  const s = $(id); let best = 0, bd = Infinity;
+  for (let k = 0; k < s.options.length; k++) { const d = Math.abs(+s.options[k].value - x); if (d < bd) { bd = d; best = k; } }
+  if (bd > Math.abs(x) * 0.02) {      // value not in the list: add it
+    const o = document.createElement('option'); o.value = String(x); o.textContent = String(x); s.appendChild(o); s.value = o.value;
+  } else s.selectedIndex = best;
+}
+function setCur(sid, iid, x, f) {
+  if (isNaN(x)) return;
+  $(sid).textContent = f(x);
+  const inp = $(iid);
+  if (document.activeElement !== inp && !inp.dataset.dirty) inp.value = +x.toPrecision(6);
+}
+
+// ── Controls ────────────────────────────────────────────────────────────────
+const KEYS = {v: ['VOLT', 'iv', () => lim.v], i: ['CURR', 'ii', () => lim.i], ovp: ['VOLT:PROT', 'iovp', () => lim.ovp], dly: ['OUTP:PROT:DEL', 'idly', () => 3600]};
+function numStr(x) { return String(+x.toPrecision(7)); }
+function applyKey(k, val) {
+  const [code, iid, mx] = KEYS[k];
+  let x = parseFloat(val);
+  if (!isFinite(x)) { logErr(tr('Invalid value', '値が不正です')); return; }
+  x = Math.max(0, Math.min(mx(), x));
+  const inp = $(iid); inp.value = +x.toPrecision(7); delete inp.dataset.dirty;
+  if (k === 'v' && num('VOLT:PROT?') > 0 && x >= num('VOLT:PROT?'))
+    logErr(tr('Note: voltage ≥ OVP level — OVP will trip when the output is on.', '注意: 電圧が OVP 値以上です — 出力オンで過電圧保護が動作します。'));
+  cmd(code + ' ' + numStr(x));
+}
+document.querySelectorAll('.ctl[data-k]').forEach(el => {
+  const k = el.dataset.k, inp = $(KEYS[k][1]);
+  el.querySelector('.apply').onclick = () => applyKey(k, inp.value);
+  inp.addEventListener('input', () => { inp.dataset.dirty = '1'; });
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') applyKey(k, inp.value); if (e.key === 'Escape') { delete inp.dataset.dirty; inp.blur(); } });
+  el.querySelectorAll('button[data-d]').forEach(b => b.onclick = () => { setActive(k); bump(k, +b.dataset.d); });
+  inp.addEventListener('focus', () => setActive(k));
+  el.querySelector('.cur').onclick = () => setActive(k);
+  el.previousElementSibling.onclick = () => setActive(k);
+});
+
+// ── Data entry: active setting, keypad, jog dial ────────────────────────────
+// Active setting = target of the keypad and the jog dial (like the instrument's panel).
+const DE = {
+  v:   {name: ['Voltage', '電圧'],          q: 'VOLT?',          u: 'V', mu: 'mV', dig: 4},
+  i:   {name: ['Current limit', '電流制限'], q: 'CURR?',          u: 'A', mu: 'mA', dig: 4},
+  ovp: {name: ['OVP level', '過電圧保護'],   q: 'VOLT:PROT?',     u: 'V', mu: 'mV', dig: 3},
+  dly: {name: ['Prot. delay', '保護遅延'],   q: 'OUTP:PROT:DEL?', u: 's', mu: 'ms', dig: 3},
+};
+const STEPS = [0.0001, 0.001, 0.01, 0.1, 1];
+const steps = {v: 0.1, i: 0.01, ovp: 0.1, dly: 0.01};
+try { Object.assign(steps, JSON.parse(localStorage.getItem('psuSteps') || '{}')); } catch (e) {}
+let active = 'v', buf = '';
+try { const a = localStorage.getItem('psuActive'); if (a in DE) active = a; } catch (e) {}
+const target = {};             // value last sent per setting (base for jog / − +)
+let targetAt = {};
+function fmtStep(x, u, mu) { return x < 1 ? +(x * 1000).toPrecision(3) + ' ' + mu : x + ' ' + u; }
+function setActive(k) {
+  if (!(k in DE)) return;
+  if (k !== active) buf = '';
+  active = k;
+  try { localStorage.setItem('psuActive', k); } catch (e) {}
+  renderEntry();
+}
+function renderEntry() {
+  const d = DE[active];
+  $('ename').textContent = tr(d.name[0], d.name[1]);
+  const x = curVal(active);
+  $('eval').textContent = isNaN(x) ? '—' : x.toFixed(d.dig) + ' ' + d.u;
+  $('einp').textContent = buf;
+  $('k-milli').textContent = d.mu; $('k-base').textContent = d.u;
+  const sel = $('step');
+  if (sel.dataset.k !== active) {
+    sel.innerHTML = STEPS.map(v => '<option value="' + v + '">' + fmtStep(v, d.u, d.mu) + '</option>').join('');
+    sel.dataset.k = active;
+  }
+  sel.value = String(steps[active]);
+  document.querySelectorAll('.ctl[data-k]').forEach(el => {
+    const on = el.dataset.k === active;
+    el.classList.toggle('act', on); el.previousElementSibling.classList.toggle('act', on);
+  });
+  document.querySelectorAll('#selk button').forEach(b => b.classList.toggle('act', b.dataset.a === active));
+}
+// Instrument value, or the value just sent while the reply is pending.
+function curVal(k) {
+  if (k in target && Date.now() - targetAt[k] < 1500) return target[k];
+  return num(DE[k].q);
+}
+function bump(k, n) {
+  const base = curVal(k);
+  if (isNaN(base)) return;
+  const stp = steps[k];
+  let x = Math.round((base + n * stp) / stp) * stp;          // snap to the step grid
+  x = Math.max(0, Math.min(KEYS[k][2](), +x.toPrecision(10)));
+  if (x === base) return;
+  target[k] = x; targetAt[k] = Date.now();
+  applyKey(k, x);
+  if (k === active) renderEntry();
+}
+function enterBuf(mult) {
+  if (!buf) return;
+  const x = parseFloat(buf);
+  buf = '';
+  if (!isFinite(x)) { renderEntry(); logErr(tr('Invalid value', '値が不正です')); return; }
+  const v = +(x * mult).toPrecision(10);
+  target[active] = Math.max(0, Math.min(KEYS[active][2](), v)); targetAt[active] = Date.now();
+  applyKey(active, v);
+  renderEntry();
+}
+function padKey(t) {
+  if (/^[0-9]$/.test(t)) { if (buf.length < 10) buf += t; }
+  else if (t === '.') { if (!buf.includes('.') && buf.length < 10) buf += buf ? '.' : '0.'; }
+  else if (t === 'bs') buf = buf.slice(0, -1);
+  else if (t === 'esc') buf = '';
+  else if (t === 'base') return enterBuf(1);
+  else if (t === 'milli') return enterBuf(0.001);
+  else if (t === 'up' || t === 'dn') { buf = ''; bump(active, t === 'up' ? 1 : -1); }
+  else if (t === 'dbl' || t === 'half') {
+    const i = STEPS.indexOf(steps[active]) + (t === 'dbl' ? 1 : -1);
+    if (i >= 0 && i < STEPS.length) { steps[active] = STEPS[i]; saveSteps(); }
+  }
+  renderEntry();
+}
+function saveSteps() { try { localStorage.setItem('psuSteps', JSON.stringify(steps)); } catch (e) {} }
+$('pad').querySelectorAll('button').forEach(b => b.onclick = () => padKey(b.dataset.f || b.textContent));
+$('selk').querySelectorAll('button').forEach(b => b.onclick = () => setActive(b.dataset.a));
+$('step').onchange = () => { steps[active] = +$('step').value; saveSteps(); $('step').blur(); };
+// Keyboard (when no input field has the focus)
+document.addEventListener('keydown', e => {
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA') || e.ctrlKey || e.metaKey || e.altKey) return;
+  let k = null;
+  if (/^[0-9.]$/.test(e.key)) k = e.key;
+  else if (e.key === 'Enter') k = 'base';
+  else if (e.key === 'Backspace') k = 'bs';
+  else if (e.key === 'Escape') k = 'esc';
+  else if (e.key === 'm' || e.key === 'M') k = 'milli';
+  else if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { jog(1, e.shiftKey); e.preventDefault(); return; }
+  else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { jog(-1, e.shiftKey); e.preventDefault(); return; }
+  if (k) { e.preventDefault(); padKey(k); }
+});
+// Jog dial (drag / mouse wheel); ticks are batched so a fast turn sends one command.
+const knob = $('knob'), kctx = knob.getContext('2d');
+let knobAngle = 0, jogAcc = 0, jogTimer = null;
+function drawKnob() {
+  const W = knob.width, c = W / 2, r = W / 2 - 8;
+  kctx.clearRect(0, 0, W, W);
+  const g = kctx.createRadialGradient(c - r / 3, c - r / 3, r / 6, c, c, r);
+  g.addColorStop(0, '#475569'); g.addColorStop(1, '#0f172a');
+  kctx.fillStyle = g; kctx.beginPath(); kctx.arc(c, c, r, 0, 2 * Math.PI); kctx.fill();
+  kctx.strokeStyle = '#2d4a6a'; kctx.lineWidth = 5; kctx.stroke();
+  kctx.strokeStyle = '#334155'; kctx.lineWidth = 3;
+  for (let i = 0; i < 24; i++) {
+    const a = knobAngle + i * Math.PI / 12;
+    kctx.beginPath(); kctx.moveTo(c + Math.cos(a) * r * .78, c + Math.sin(a) * r * .78);
+    kctx.lineTo(c + Math.cos(a) * r * .95, c + Math.sin(a) * r * .95); kctx.stroke();
+  }
+  const a = knobAngle - Math.PI / 2;
+  kctx.fillStyle = '#fbbf24'; kctx.beginPath(); kctx.arc(c + Math.cos(a) * r * .55, c + Math.sin(a) * r * .55, r * .12, 0, 2 * Math.PI); kctx.fill();
+}
+function jog(ticks, coarse) {
+  if (!ticks) return;
+  buf = '';
+  knobAngle += ticks * Math.PI / 12; drawKnob();
+  jogAcc += ticks * (coarse ? 10 : 1);
+  if (jogTimer) return;
+  jogTimer = setTimeout(() => {          // at most ~7 commands/s
+    const n = jogAcc; jogAcc = 0; jogTimer = null;
+    if (n) bump(active, n);
+  }, 150);
+}
+function onWheel(e) { e.preventDefault(); jog(e.deltaY < 0 ? 1 : -1, e.shiftKey); }
+knob.addEventListener('wheel', onWheel, {passive: false});
+$('entry').addEventListener('wheel', onWheel, {passive: false});
+let dragAng = null;
+function ptrAngle(e) { const r = knob.getBoundingClientRect(); return Math.atan2(e.clientY - r.top - r.height / 2, e.clientX - r.left - r.width / 2); }
+knob.addEventListener('pointerdown', e => { knob.setPointerCapture(e.pointerId); dragAng = ptrAngle(e); });
+knob.addEventListener('pointermove', e => {
+  if (dragAng === null) return;
+  let d = ptrAngle(e) - dragAng;
+  if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI;
+  const t = Math.trunc(d / (Math.PI / 12));
+  if (t) { dragAng += t * Math.PI / 12; jog(t, e.shiftKey); }
+});
+knob.addEventListener('pointerup', () => dragAng = null);
+knob.addEventListener('pointercancel', () => dragAng = null);
+drawKnob(); renderEntry();
+$('btn-out').onclick = () => cmd(st['OUTP?'] === '1' ? 'OUTP OFF' : 'OUTP ON');
+$('btn-clr').onclick = () => cmd('OUTP:PROT:CLE');
+$('ocp').onchange = () => cmd('CURR:PROT:STAT ' + ($('ocp').checked ? 'ON' : 'OFF'));
+$('rng').onchange = () => { cmd('SENS:CURR:RANG ' + $('rng').value); $('rng').blur(); };
+$('pts').onchange = () => { cmd('SENS:SWE:POIN ' + $('pts').value); $('pts').blur(); };
+$('tint').onchange = () => { cmd('SENS:SWE:TINT ' + $('tint').value); $('tint').blur(); };
+document.querySelectorAll('[data-sav]').forEach(b => b.onclick = () => {
+  if (confirm(tr('Save the present state to memory ', '現在の状態をメモリ ') + b.dataset.sav + tr('?', ' に保存しますか？'))) cmd('*SAV ' + b.dataset.sav);
+});
+document.querySelectorAll('[data-rcl]').forEach(b => b.onclick = () => {
+  if (confirm(tr('Recall state ', '状態 ') + b.dataset.rcl + tr('?\nThe output may turn on with the stored voltage.', ' を呼び出しますか？\n保存時の電圧で出力がオンになる場合があります。'))) cmd('*RCL ' + b.dataset.rcl);
+});
+$('btn-rst').onclick = () => { if (confirm(tr('Reset the power supply (*RST)?\nThe output turns off.', '電源をリセット（*RST）しますか？\n出力はオフになります。'))) cmd('*RST'); };
+$('btn-cls').onclick = () => { cmd('*CLS'); lastErrs = []; $('log').textContent = ''; };
+$('btn-local').onclick = () => { $('rate').value = '0'; saveRate(); cmd('LOCAL'); };
+function saveRate() { try { localStorage.setItem('psuRate', $('rate').value); } catch (e) {} }
+$('rate').onchange = () => { saveRate(); schedule(0); };
+$('addr').onchange = () => {
+  authFetch('/api/gpib_addr', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: 'dev=psu&addr=' + encodeURIComponent($('addr').value)}).catch(function () {});
+  for (const k in st) delete st[k];
+  $('idn').textContent = '—'; wantIdn = wantSettings = needOnce = true; inflight = null; schedule(0);
+};
+
+// ── Trend chart ─────────────────────────────────────────────────────────────
+function niceRange(lo, hi) {
+  if (!(hi > lo)) { const c = isFinite(lo) ? lo : 0; lo = c - 0.5; hi = c + 0.5; }
+  const pad = (hi - lo) * 0.08; return [lo - pad, hi + pad];
+}
+function drawTrend() {
+  const cv = $('trend'), dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  const L = 62, R = 66, T = 12, B = 24, pw = W - L - R, ph = H - T - B;
+  const span = +$('tspan').value * 1000;
+  const now = hist.length ? hist[hist.length - 1].t : Date.now();
+  const t0 = span ? now - span : (hist.length ? hist[0].t : now - 60000);
+  const pts = hist.filter(p => p.t >= t0);
+  g.font = '11px Segoe UI, Arial, sans-serif';
+  g.strokeStyle = '#1e293b'; g.lineWidth = 1;
+  for (let k = 0; k <= 5; k++) { const y = T + ph * k / 5; g.beginPath(); g.moveTo(L, y); g.lineTo(L + pw, y); g.stroke(); }
+  const tsp = Math.max(1000, now - t0);
+  g.fillStyle = '#64748b'; g.textAlign = 'center';
+  for (let k = 0; k <= 4; k++) {
+    const x = L + pw * k / 4; g.beginPath(); g.moveTo(x, T); g.lineTo(x, T + ph); g.stroke();
+    const sec = (tsp * (1 - k / 4)) / 1000;
+    g.fillText(k === 4 ? tr('now', '現在') : '-' + (sec >= 60 ? (sec / 60).toFixed(sec % 60 ? 1 : 0) + ' min' : sec.toFixed(0) + ' s'), x, H - 7);
+  }
+  $('tinfo').textContent = hist.length ? tr('Samples: ', 'サンプル数: ') + hist.length + (hist.length >= HIST_MAX ? tr(' (oldest dropped)', '（古いものから削除）') : '') : '';
+  if (pts.length < 1) return;
+  const vs = pts.map(p => p.v), is = pts.map(p => p.i);
+  const [vlo, vhi] = niceRange(Math.min(...vs), Math.max(...vs));
+  const [ilo, ihi] = niceRange(Math.min(...is), Math.max(...is));
+  const X = t => L + pw * (t - (now - tsp)) / tsp;
+  const line = (arr, lo, hi, col) => {
+    g.strokeStyle = col; g.lineWidth = 1.6; g.beginPath();
+    pts.forEach((p, k) => { const y = T + ph * (1 - (arr[k] - lo) / (hi - lo)); if (k) g.lineTo(X(p.t), y); else g.moveTo(X(p.t), y); });
+    g.stroke();
+  };
+  // CC / OFF shading
+  pts.forEach((p, k) => {
+    if (p.mode !== 'CC' && p.mode !== 'OFF') return;
+    const x1 = X(p.t), x2 = k + 1 < pts.length ? X(pts[k + 1].t) : x1 + 2;
+    g.fillStyle = p.mode === 'CC' ? 'rgba(251,191,36,.10)' : 'rgba(100,116,139,.10)'; g.fillRect(x1, T, x2 - x1, ph);
+  });
+  line(vs, vlo, vhi, '#4ade80'); line(is, ilo, ihi, '#fbbf24');
+  g.textAlign = 'right'; g.fillStyle = '#4ade80';
+  for (let k = 0; k <= 5; k++) g.fillText((vhi - (vhi - vlo) * k / 5).toPrecision(5) + ' V', L - 5, T + ph * k / 5 + 4);
+  g.textAlign = 'left'; g.fillStyle = '#fbbf24';
+  const iu = Math.max(Math.abs(ilo), Math.abs(ihi)) < 0.1;
+  for (let k = 0; k <= 5; k++) { const x = ihi - (ihi - ilo) * k / 5; g.fillText(iu ? (x * 1000).toPrecision(4) + ' mA' : x.toPrecision(4) + ' A', L + pw + 5, T + ph * k / 5 + 4); }
+}
+$('tspan').onchange = drawTrend;
+$('btn-tclr').onclick = () => { hist.length = 0; drawTrend(); };
+window.addEventListener('resize', drawTrend);
+function isoLocal(t) {
+  const d = new Date(t), p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+}
+$('btn-csv').onclick = () => {
+  if (!hist.length) { logErr(tr('No data recorded yet', 'まだデータがありません')); return; }
+  const lines = ['# ' + ($('idn').textContent || 'power supply') + ' GPIB ' + addr(),
+    '# set: VOLT=' + (st['VOLT?'] || '') + ' CURR=' + (st['CURR?'] || '') + ' VOLT:PROT=' + (st['VOLT:PROT?'] || '') + ' OCP=' + (st['CURR:PROT:STAT?'] || ''),
+    'time,elapsed_s,voltage_V,current_A,power_W,mode'];
+  const t0 = hist[0].t;
+  for (const p of hist) lines.push([isoLocal(p.t), ((p.t - t0) / 1000).toFixed(3), p.v, p.i, +(p.v * p.i).toPrecision(7), p.mode].join(','));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([lines.join('\n') + '\n'], {type: 'text/csv'}));
+  a.download = 'psu_' + isoLocal(Date.now()).replace(/[-:]/g, '').replace('T', '_').slice(0, 15) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+drawTrend();
+connect();
+</script>
+</body></html>

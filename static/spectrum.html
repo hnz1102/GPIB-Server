@@ -1,0 +1,1831 @@
+<!DOCTYPE html><html lang="ja"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title data-ja="GPIB スペクトラム表示">GPIB Spectrum View</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#111827;color:#e2e8f0;font-family:'Segoe UI',Arial,sans-serif;height:100vh;display:flex;flex-direction:column}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 14px;background:#1e2d45;border-bottom:1px solid #243b55}
+.toolbar h1{font-size:1em;color:#93c5fd;margin-right:auto;letter-spacing:.05em}
+.toolbar label{font-size:.78em;color:#94a3b8;display:flex;align-items:center;gap:4px}
+.toolbar input[type=number]{width:56px;padding:5px 6px;background:#0f172a;border:1px solid #2d4a6a;border-radius:6px;color:#e2e8f0}
+button,.btn{padding:6px 12px;border-radius:6px;border:1px solid #2d4a6a;background:#0f172a;color:#e2e8f0;font-size:.85em;cursor:pointer;text-decoration:none;font-weight:600;user-select:none}
+button:hover,.btn:hover{filter:brightness(1.25)}
+button:active{transform:translateY(1px)}
+#btn-start{background:#166534;border-color:#16a34a}
+#btn-stop{background:#991b1b;border-color:#dc2626}
+#btn-rec.on{background:#7f1d1d;border-color:#f87171;color:#fecaca}
+.status{font-size:.78em;padding:3px 10px;border-radius:12px;font-weight:700}
+.ok{background:#14532d;color:#4ade80}.off{background:#4c0519;color:#fb7185}.warn{background:#451a03;color:#fb923c}
+.info{display:flex;flex-wrap:wrap;gap:4px 18px;padding:6px 14px;font-size:.82em;color:#cbd5e1;background:#16213a;border-bottom:1px solid #243b55}
+.info b{color:#7dd3fc;font-weight:600}
+#main{flex:1;display:flex;min-height:0}
+#wrap{flex:1;position:relative;min-width:0;min-height:260px}
+#cv{position:absolute;left:0;right:0;top:0;width:100%;height:100%;cursor:crosshair}
+#cv2{position:absolute;left:0;right:0;width:100%;display:none;cursor:crosshair;border-top:1px solid #243b55}
+#wf{position:absolute;left:0;right:0;bottom:0;width:100%;display:none;cursor:crosshair;border-top:1px solid #243b55}
+#msg{position:absolute;left:70px;bottom:34px;font-size:.8em;color:#fca5a5;background:rgba(17,24,39,.85);padding:2px 6px;border-radius:4px}
+#msg:empty{display:none}
+/* ── front panel ── */
+#panel{width:560px;flex-shrink:0;background:#1a2438;border-left:1px solid #243b55;padding:10px;display:flex;flex-direction:column;gap:9px;overflow-y:auto}
+.top{display:flex;gap:10px;align-items:stretch}
+.entry{flex:1;background:#0b1220;border:1px solid #2d4a6a;border-radius:8px;padding:8px 10px;min-height:84px}
+.entry .name{font-size:.72em;color:#94a3b8;letter-spacing:.08em;text-transform:uppercase}
+.entry .val{font-size:1.2em;color:#7dd3fc;font-weight:700;font-family:Consolas,monospace;margin-top:2px;word-break:break-all}
+.entry .inp{font-size:1.05em;color:#fbbf24;font-family:Consolas,monospace;min-height:1.3em}
+.entry .inp:not(:empty)::after{content:'_';animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+.knob{width:84px;display:flex;flex-direction:column;align-items:center;gap:2px}
+#knob{width:84px;height:84px;cursor:grab;touch-action:none}
+#knob:active{cursor:grabbing}
+.knob span{font-size:.62em;color:#64748b;letter-spacing:.08em}
+.sec{font-size:.68em;color:#64748b;letter-spacing:.1em;margin-bottom:-4px}
+.grid{display:grid;gap:6px}
+.hard{grid-template-columns:1fr 1fr}
+.hard button{padding:9px 2px;font-size:.82em;background:#24324a}
+.hard button.lit{background:#166534;border-color:#4ade80;color:#dcfce7}
+.fkrow{display:flex;gap:10px;align-items:flex-start}
+.fkcol{flex:1.15;display:flex;flex-direction:column;gap:6px;min-width:0}
+.padcol{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0}
+.bigkeys{grid-template-columns:1fr 1fr}
+.bigkeys button{padding:14px 4px;font-size:1em;font-weight:700;letter-spacing:.06em;background:#24324a;border-width:2px}
+.bigkeys button.sel{background:#1d4ed8;border-color:#60a5fa}
+.fkeys{grid-template-columns:repeat(3,1fr)}
+.shdr{grid-column:1/-1;font-size:.66em;color:#93c5fd;letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid #243b55;padding:4px 0 2px;margin-top:2px}
+#result{background:#0b1220;border:1px solid #2d4a6a;border-radius:8px;padding:8px 10px;font-size:.8em}
+#result .rrow{display:flex;justify-content:space-between;gap:10px;padding:2px 0;border-top:1px dashed #1f3352}
+#result .rtab{width:100%;border-collapse:collapse;margin:2px 0 4px;font-family:Consolas,monospace;font-variant-numeric:tabular-nums}
+#result .rtab th{color:#94a3b8;font-weight:600;font-family:'Segoe UI',Arial,sans-serif;font-size:.92em;text-align:right;padding:2px 6px;border-bottom:1px solid #2d4a6a;white-space:nowrap}
+#result .rtab td{color:#7dd3fc;text-align:right;padding:1px 6px;white-space:nowrap}
+#result .rtab td:first-child,#result .rtab th:first-child{color:#fde047;text-align:center;width:2.2em}
+#result .rtab tr:nth-child(even) td{background:rgba(30,45,69,.45)}
+#result .rrow.tab{flex-direction:column;gap:2px}
+#result .rrow span{color:#94a3b8}#result .rrow b{color:#7dd3fc;font-weight:600;text-align:right;font-family:Consolas,monospace}
+.fkeys button{padding:7px 1px;font-size:.7em;background:#24324a}
+.fkeys button.sel{background:#1d4ed8;border-color:#60a5fa}
+.soft{grid-template-columns:1fr 1fr}
+.soft button{text-align:left;padding:6px 8px;min-height:42px;background:#1f2a3f;font-size:.78em}
+.soft button .v{display:block;font-size:.85em;color:#7dd3fc;font-weight:500;margin-top:2px;font-family:Consolas,monospace}
+.soft button.act{background:#7c2d12;border-color:#fb923c}
+.soft button.on{border-color:#4ade80}
+.soft button.on .v{color:#4ade80}
+.pad{grid-template-columns:repeat(4,1fr)}
+.pad button{padding:10px 0;font-size:1.05em;font-family:Consolas,monospace}
+.pad .unit{background:#3b2a63;border-color:#7c3aed;font-size:.82em}
+.pad .unit:disabled{opacity:.3;cursor:default;filter:none}
+.pad .step{background:#24324a}
+@media (max-width:1100px){#panel{width:480px}}
+@media (max-width:900px){#main{flex-direction:column}#panel{width:auto;border-left:none;border-top:1px solid #243b55}#wrap{min-height:320px}}
+@media (max-width:520px){.fkrow{flex-direction:column}.fkcol,.padcol{width:100%}}
+</style></head><body>
+<div class="toolbar">
+  <h1>&#x1F4C8; <span data-ja="スペクトラム表示">Spectrum View</span> <span style="color:#64748b;font-size:.8em">ADVANTEST R3267 via GPIB</span></h1>
+  <span id="lang-slot"></span>
+  <label data-help="GPIB address of the R3267 (0-30).&#10;Must match the GPIB address set on the instrument." data-help-ja="R3267 の GPIB アドレス（0〜30）。&#10;本体の GPIB アドレス設定と合わせてください。">ADDR <input id="addr" type="number" min="0" max="30" value="{{ADDR}}"></label>
+  <button id="btn-start" data-help="Start capturing the trace with the R3267's current settings.&#10;(Switches to DL2 and repeats TS + TBA?)" data-help-ja="R3267 の現在の設定のまま波形の取り込みを開始します。&#10;（DL2 に切り替え、TS + TBA? を繰り返し）"><span data-ja="&#x25B6; 開始">&#x25B6; Start</span></button>
+  <button id="btn-stop" data-help="Stop capturing and restore the R3267 delimiter to DL0.&#10;Also aborts an operation that is stuck waiting for a reply." data-help-ja="取り込みを停止し、R3267 の区切り文字を DL0 に戻します。&#10;応答待ちで止まっている処理も中断します。"><span data-ja="&#x25A0; 停止">&#x25A0; Stop</span></button>
+  <label data-help="Hold the maximum of each point in the browser (orange line).&#10;Independent of the R3267's own Max Hold (TRACE A)." data-help-ja="ブラウザ側で各点の最大値を保持してオレンジ線で表示します。&#10;R3267 本体の Max Hold（TRACE A）とは別機能です。"><input id="maxhold" type="checkbox"> <span data-ja="Max hold（ブラウザ）">Max hold (browser)</span></label>
+  <button id="btn-clear" data-help="Clear the browser's max hold." data-help-ja="ブラウザ側の Max hold 表示をクリアします。" data-ja="hold クリア">Clear hold</button>
+  <label data-help="Waterfall: show the history of trace A below the spectrum (colour = level, newest row at the top)." data-help-ja="ウォーターフォール: スペクトラムの下にトレース A の履歴を表示します（色 = レベル、最新が一番上）。"><input id="wfon" type="checkbox"> <span data-ja="ウォーターフォール">Waterfall</span></label>
+  <label data-help="Waterfall colour range.&#10;Auto: fitted to the data (noise floor … highest level, follows changes smoothly).&#10;Ref range: reference level … bottom of the screen (same as the spectrum)." data-help-ja="ウォーターフォールの色範囲。&#10;自動: データに合わせて調整（ノイズフロア〜最大レベル、変化に滑らかに追従）。&#10;基準範囲: 基準レベル〜画面下端（スペクトラムと同じ）。"><span data-ja="色">Colour</span>
+    <select id="wfmode" style="padding:4px 6px;background:#0f172a;border:1px solid #2d4a6a;border-radius:6px;color:#e2e8f0">
+      <option value="auto" data-ja="自動">Auto</option><option value="ref" data-ja="基準範囲">Ref range</option></select></label>
+  <button id="btn-wfclr" data-help="Clear the waterfall history." data-help-ja="ウォーターフォールの履歴を消去します。" data-ja="WF クリア">Clear WF</button>
+  <button id="btn-csv" data-help="Save the current traces as CSV (A, B, max hold, lower screen),&#10;with the settings, marker, XY cursor and peak list in the header lines (#)." data-help-ja="現在の波形を CSV で保存します（A・B・Max hold・分割時の下画面）。&#10;先頭の # 行に設定値・マーカ・XY カーソル・ピークリストを記録します。">&#x2B07; CSV</button>
+  <button id="btn-png" data-help="Save the graph as a PNG image (spectrum, lower screen and waterfall as shown, with the settings)." data-help-ja="グラフを PNG 画像で保存します（表示中のスペクトラム・下画面・ウォーターフォールと設定値）。">&#x2B07; PNG</button>
+  <button id="btn-rec" data-help="Record every trace-A frame while capturing.&#10;Press again to stop: the recording is saved as CSV (one row per frame: time + levels).&#10;Stops and saves by itself when the frequency axis or level scale changes,&#10;or after 20000 frames." data-help-ja="取り込み中のトレース A を毎フレーム記録します。&#10;もう一度押すと停止し、CSV で保存します（1 行 = 1 フレーム: 時刻 + 各点のレベル）。&#10;周波数軸・レベル軸が変わったとき、または 20000 フレームで自動的に停止・保存します。">&#x25CF; REC</button>
+  <span id="run" class="status off" data-ja="停止中">Stopped</span>
+  <span id="conn" class="status off">WS --</span>
+  <a href="/" class="btn" style="background:#374151" data-ja="&#x2190; メインメニュー">&#x2190; Main menu</a>
+</div>
+<div class="info">
+  <span>CF <b id="i-cf">--</b></span><span>SPAN <b id="i-span">--</b></span><span>RBW <b id="i-rbw">--</b></span>
+  <span>VBW <b id="i-vbw">--</b></span><span>SWP <b id="i-swt">--</b></span><span>ATT <b id="i-att">--</b></span>
+  <span>REF <b id="i-rl">--</b></span><span>SCALE <b id="i-dd">--</b></span><span>TRACE <b id="i-tr">--</b></span>
+  <span>PEAK <b id="i-pk">--</b></span><span>MKR <b id="i-mk">--</b></span><span>CURSOR <b id="i-cur">--</b></span><span>RATE <b id="i-fps">--</b></span>
+</div>
+<div id="main">
+  <div id="wrap" data-help="Trace display.&#10;Green: trace A, magenta: trace B, orange dashed: display line,&#10;cyan ◆: instrument marker, red ▼: peak, yellow numbered ▼: peak list (MKR → Peak List),&#10;white dotted lines: XY cursor, orange ⊕: its anchor (TRACE A → XY Cursor).&#10;Click: move the marker to that frequency (MK)&#10;Wheel: fine-adjust the active function (jog)" data-help-ja="波形表示。&#10;緑: トレース A、マゼンタ: トレース B、オレンジ破線: ディスプレイライン、&#10;水色◆: 本体マーカ、赤▼: ピーク、黄色の番号付き▼: ピークリスト（MKR → Peak List）、&#10;白い点線: XY カーソル、オレンジの⊕: そのアンカー（TRACE A → XY Cursor）。&#10;クリック: その周波数にマーカを移動（MK）&#10;ホイール: アクティブ項目を微調整（ジョグ）"><canvas id="cv"></canvas><canvas id="cv2" data-help="Lower screen of the WINDOW split display (Zoom / F/T / T/T).&#10;Both screens are read by switching SCRSEL, so the update rate drops to about 1 frame/s." data-help-ja="WINDOW 分割表示（Zoom / F/T / T/T）の下画面。&#10;SCRSEL を切り替えて両画面を読むため、更新は約 1 フレーム/秒に下がります。"></canvas><canvas id="wf" data-help="Waterfall: trace A history (colour = level, newest at the top). Hover: frequency / level / age. Click: move the marker. Wheel: jog." data-help-ja="ウォーターフォール: トレース A の履歴（色 = レベル、最新が上）。マウスオーバー: 周波数・レベル・経過時間、クリック: マーカ移動、ホイール: ジョグ。"></canvas><div id="msg"></div></div>
+  <div id="panel">
+    <div class="top">
+      <div class="entry" id="entry" data-help="Active function display.&#10;Top: parameter being set, middle: current value, bottom: value being typed.&#10;Turning the mouse wheel here works like the jog dial." data-help-ja="アクティブファンクション表示。&#10;上: 設定中の項目、中: 現在値、下: テンキー入力中の値。&#10;ここでマウスホイールを回すとジョグダイアルと同じ動作になります。">
+        <div class="name" id="af-name">--</div>
+        <div class="val" id="af-val">--</div>
+        <div class="inp" id="af-inp"></div>
+      </div>
+      <div class="knob"><canvas id="knob" width="168" height="168" data-help="Jog dial (like the data knob on the instrument).&#10;Turn it with the mouse wheel or by dragging to change the active function in fine steps.&#10;Hold Shift for coarse steps. The ← → keys also work." data-help-ja="ジョグダイアル（本体のデータノブ相当）。&#10;マウスホイール または ドラッグで回すと、アクティブ項目を細かいステップで変更します。&#10;Shift を押しながら回すと粗いステップになります。&#10;キーボードの ← → でも操作できます。"></canvas><span data-ja="ジョグダイアル">JOG DIAL</span></div>
+    </div>
+    <div class="grid hard">
+      <button id="hk-repeat" data-help="REPEAT (continuous sweep).&#10;Sets the R3267 to continuous sweep (CONTS) and captures continuously." data-help-ja="REPEAT（連続掃引）。&#10;R3267 を連続掃引（CONTS）にし、ブラウザへの取り込みも連続で行います。">REPEAT</button>
+      <button id="hk-single" data-help="SINGLE (single sweep).&#10;Each press takes and captures one sweep, then holds the display (SNGLS)." data-help-ja="SINGLE（単掃引）。&#10;押すたびに 1 回だけ掃引して取り込み、表示を保持します（SNGLS）。">SINGLE</button>
+    </div>
+    <div class="fkrow">
+      <div class="fkcol">
+        <div class="sec" data-ja="ファンクション">FUNCTION</div>
+        <div class="grid bigkeys" id="bigkeys"></div>
+        <div class="grid fkeys" id="fkeys"></div>
+      </div>
+      <div class="padcol">
+        <div class="sec" data-ja="データ入力">DATA ENTRY</div>
+        <div class="grid pad" id="pad"></div>
+      </div>
+    </div>
+    <div class="sec" id="soft-title">SOFT KEYS</div>
+    <div class="grid soft" id="soft"></div>
+    <div id="result" style="display:none"></div>
+  </div>
+</div>
+<script>
+const TOKEN = '{{TOKEN}}';
+const TOP = 14592, PER_DIV = 1280;          // R3267 raw scale (manual 5.2.10.3)
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d');
+let meta = null, trace = null, traceB = null, meta2 = null, trace2 = null, mouseX2 = null, hold = null, ws = null, running = false;
+let frames = [], mouseX = null;
+
+// ── formatting ──────────────────────────────────────────────────────────────
+function trimNum(x, d) { return (+x).toFixed(d).replace(/\.?0+$/, ''); }
+function fmtHz(f) {
+  if (f == null || !isFinite(f)) return '--';
+  const a = Math.abs(f);
+  if (a >= 1e9) return trimNum(f / 1e9, 6) + ' GHz';
+  if (a >= 1e6) return trimNum(f / 1e6, 4) + ' MHz';
+  if (a >= 1e3) return trimNum(f / 1e3, 3) + ' kHz';
+  return trimNum(f, 1) + ' Hz';
+}
+// engineering format for linear units (W / V)
+function fmtEng(v, u) {
+  if (v == null || !isFinite(v)) return '--';
+  const a = Math.abs(v);
+  const [d, p] = a >= 1 ? [1, ''] : a >= 1e-3 ? [1e-3, 'm'] : a >= 1e-6 ? [1e-6, 'µ'] : a >= 1e-9 ? [1e-9, 'n'] : [1e-12, 'p'];
+  return trimNum(v / d, 3) + ' ' + p + u;
+}
+function fmtTime(t) {
+  if (t == null || !isFinite(t)) return '--';
+  if (t >= 1) return trimNum(t, 3) + ' s';
+  if (t >= 1e-3) return trimNum(t * 1e3, 3) + ' ms';
+  return trimNum(t * 1e6, 3) + ' µs';
+}
+const FMT = {
+  freq: fmtHz, time: fmtTime,
+  level: v => v == null || !isFinite(v) ? '--' : lin(meta) ? fmtEng(v, unitName()) : trimNum(v, 2) + ' ' + unitName(),
+  db: v => v == null || !isFinite(v) ? '--' : trimNum(v, 2) + ' dB',
+  count: v => v == null || !isFinite(v) ? '--' : String(Math.round(v)),
+  ratio: v => v == null || !isFinite(v) ? '--' : trimNum(v, 4),
+};
+// number → GPIB argument without exponent notation
+function arg(v, unit) { return trimNum(v, 9) + unit; }
+// TA?/TB?: low nibble = mode (Write/View/Blank/Normalize), high nibble = add-on
+// (MaxHold/Average/MinHold/PowerAvg); e.g. 32 = 0x20 = Write + Average.
+const lo = v => (v | 0) & 0x0F, hi = v => ((v | 0) >> 4) & 0x0F;
+const TRMODE = ['Write', 'View', 'Blank', 'Normalize'], TRADD = ['', '+MaxHold', '+Avg', '+MinHold', '+PwrAvg'];
+const DETN = ['Normal', 'Pos', 'Neg', 'Sample'];
+
+// ── value step helpers (jog dial / ↑↓) ──────────────────────────────────────
+function seq(v, dir, mant) {              // step through mant×10^n
+  if (!(v > 0)) return mant[0];
+  const e = Math.floor(Math.log10(v) + 1e-9), m = v / Math.pow(10, e);
+  let i = mant.findIndex(x => Math.abs(x - m) < 1e-6);
+  if (i < 0) { i = mant.findIndex(x => x > m); if (dir > 0) return (i < 0 ? 10 * mant[0] : mant[i]) * Math.pow(10, e); i = i < 0 ? mant.length : i; return (i === 0 ? mant[mant.length - 1] / 10 : mant[i - 1]) * Math.pow(10, e); }
+  i += dir;
+  if (i >= mant.length) return mant[0] * Math.pow(10, e + 1);
+  if (i < 0) return mant[mant.length - 1] * Math.pow(10, e - 1);
+  return mant[i] * Math.pow(10, e);
+}
+const S125 = [1, 2, 5], S13 = [1, 3];
+
+// ── parameters (numeric entry / jog targets) ────────────────────────────────
+// kind → units: [label, GPIB unit, scale to base unit, sign]
+// Levels use the R3267 unit keys +dBm / -dBm: the typed number is entered with
+// that sign (e.g. 2 0 [-dBm] → -20 dBm).
+const UNITS = {
+  freq:  [['GHz', 'GZ', 1e9], ['MHz', 'MZ', 1e6], ['kHz', 'KZ', 1e3], ['Hz', 'HZ', 1]],
+  level: [['+dBm', 'DB', 1, +1], ['-dBm', 'DB', 1, -1]],
+  db:    [['dB', 'DB', 1]],
+  time:  [['s', 'SC', 1], ['ms', 'MS', 1e-3], ['µs', 'US', 1e-6]],
+  count: [['ENTER', '', 1]],
+  ratio: [['ENTER', '', 1]],
+};
+const DEF_UNIT = {freq: 'MZ', level: 'DB', db: 'DB', time: 'MS', count: '', ratio: ''};
+const BASE_UNIT = {freq: 'HZ', level: 'DB', db: 'DB', time: 'SC', count: '', ratio: ''};
+// Soft-key states and measurement results read with panel queries ({cmd:'query'}).
+let st = {};
+const stNum = q => { const v = parseFloat(st[q]); return isFinite(v) && Math.abs(v) < 9.99e8 ? v : null; };
+// Generic step for parameters held in `st` (jog = fine, ↑↓ = coarse).
+function stepGeneric(kind, v, d, f) {
+  if (v == null) return null;
+  switch (kind) {
+    case 'freq': case 'time': return f ? v + d * Math.max(Math.abs(v) / 100, kind === 'time' ? 1e-6 : 1) : seq(v, d, S125);
+    case 'level': case 'db': return v + d * (f ? 0.5 : 5);
+    case 'ratio': return +(v + d * (f ? 0.01 : 0.1)).toFixed(4);
+    default: return v + d * (f ? 1 : 10);
+  }
+}
+// key: meta field, or sq: state query; step(m, dir, fine) for meta params;
+// lim: [min, max] clamp; local: value kept in the browser (not sent).
+const P = {
+  CF: {name: 'Center', kind: 'freq', key: 'cf', step: (m, d, f) => m.cf + d * (f ? m.span / 100 : (m.cfstep || m.span / 10))},
+  FA: {name: 'Start', kind: 'freq', key: 'fa', step: (m, d, f) => m.fa + d * m.span / (f ? 100 : 10)},
+  FB: {name: 'Stop', kind: 'freq', key: 'fb', step: (m, d, f) => m.fb + d * m.span / (f ? 100 : 10)},
+  CS: {name: 'CF Step', kind: 'freq', key: 'cfstep', step: (m, d) => seq(m.cfstep, d, S125)},
+  SP: {name: 'Span', kind: 'freq', key: 'span', step: (m, d) => seq(m.span, d, S125)},
+  RL: {name: 'Ref Level', kind: 'level', key: 'rl', step: (m, d, f) => m.rl + d * (f ? 1 : m.ddiv)},
+  DD: {name: 'Scale /div', kind: 'db', key: 'ddiv', step: (m, d) => { const s = [0.5, 1, 2, 5, 10]; return s[Math.max(0, Math.min(4, s.indexOf(m.ddiv) + d))]; }},
+  AT: {name: 'ATT', kind: 'db', key: 'att', step: (m, d) => Math.max(0, m.att + 10 * d)},
+  RB: {name: 'RBW', kind: 'freq', key: 'rbw', step: (m, d) => seq(m.rbw, d, S13)},
+  VB: {name: 'VBW', kind: 'freq', key: 'vbw', step: (m, d) => seq(m.vbw, d, S13)},
+  SW: {name: 'Sweep Time', kind: 'time', key: 'swt', step: (m, d) => seq(m.swt, d, S125)},
+  SWPCNT: {name: 'Sweep Count', kind: 'count', key: 'swpcnt', lim: [2, 999], step: (m, d, f) => m.swpcnt + d * (f ? 1 : 10)},
+  DL: {name: 'Display Line', kind: 'level', key: 'dl', step: (m, d, f) => m.dl + d * (f ? 0.5 : m.ddiv)},
+  MK: {name: 'Marker', kind: 'freq', key: 'mkf', step: (m, d, f) => m.span
+        ? (m.mkr && isFinite(m.mkf) ? m.mkf : m.cf) + d * m.span / (f ? 500 : 50)
+        : Math.max(0, Math.min(m.swt || 0, (m.mkr && isFinite(m.mkf) ? m.mkf : 0) + d * (m.swt || 0) / (f ? 500 : 50)))},
+  // values read with panel queries
+  FO: {name: 'Freq Offset', kind: 'freq', sq: 'FO?'},
+  PPM: {name: 'Presel Manual', kind: 'count', sq: 'PPM?', lim: [-100, 100]},
+  BND: {name: 'Band', kind: 'count', sq: 'BND?', lim: [0, 9]},
+  RO: {name: 'Ref Offset', kind: 'db', sq: 'RO?'},
+  ATMIN: {name: 'Min ATT', kind: 'db', sq: 'ATMIN?', lim: [0, 70], stepf: (v, d) => v + 10 * d},
+  CORS: {name: 'RBW:SPAN', kind: 'ratio', sq: 'CORS?', lim: [0.001, 0.1], stepf: (v, d) => seq(v, d, S125)},
+  COVR: {name: 'VBW:RBW', kind: 'ratio', sq: 'COVR?', lim: [0.003, 3], stepf: (v, d) => seq(v, d, S13)},
+  TRGLVL: {name: 'Trig Level %', kind: 'count', sq: 'TRGLVL?', lim: [0, 100]},
+  TRGDT: {name: 'Trig Delay', kind: 'time', sq: 'TRGDT?'},
+  GTPOS: {name: 'Gate Position', kind: 'time', sq: 'GTPOS?'},
+  GTWID: {name: 'Gate Width', kind: 'time', sq: 'GTWID?'},
+  ANLGTM: {name: 'Analog Times', kind: 'count', sq: null, lim: [2, 32]},
+  CSRX: {name: 'X Cursor', kind: 'freq', sq: 'CSRX?'},
+  CSRY: {name: 'Y Cursor', kind: 'level', sq: 'CSRY?'},
+  LIMSFT: {name: 'Limit X Shift', kind: 'freq', sq: null},
+  LIMASFT: {name: 'Limit Y Shift', kind: 'db', sq: null},
+  WLX: {name: 'Window Pos', kind: 'freq', sq: 'WLX?'},
+  WDX: {name: 'Window Width', kind: 'freq', sq: 'WDX?'},
+  ZMPOS: {name: 'Zoom Pos', kind: 'freq', sq: 'ZMPOS?'},
+  ZMWID: {name: 'Zoom Width', kind: 'freq', sq: 'ZMWID?'},
+  MPM: {name: 'Marker Step', kind: 'freq', sq: 'MPM?'},
+  MKSPOS: {name: 'Search Pos', kind: 'freq', sq: 'MKSPOS?'},
+  MKSWID: {name: 'Search Width', kind: 'freq', sq: 'MKSWID?'},
+  DY: {name: 'Peak ΔY div', kind: 'ratio', sq: 'DY?', lim: [0.1, 10], stepf: (v, d, f) => +(v + d * (f ? 0.1 : 1)).toFixed(1)},
+  MKBW: {name: 'X dB Value', kind: 'db', sq: 'MKBW?'},
+  PWTM: {name: 'Power Avg Count', kind: 'count', sq: 'PWTM?', lim: [1, 999]},
+  ACPAVG: {name: 'ACP Avg Count', kind: 'count', sq: 'ACPAVG?', lim: [1, 999]},
+  SYMRT: {name: 'Symbol Rate', kind: 'freq', sq: 'SYMRT?'},
+  RFACT: {name: 'Rolloff α', kind: 'ratio', sq: 'RFACT?', lim: [0.01, 0.99]},
+  OBWPER: {name: 'OBW %', kind: 'ratio', sq: 'OBWPER?', lim: [10, 99.8], stepf: (v, d, f) => +(v + d * (f ? 0.1 : 1)).toFixed(1)},
+  AVGOBW: {name: 'OBW Avg Count', kind: 'count', sq: 'AVGOBW?', lim: [1, 999]},
+  HRMNUM: {name: 'Harmonics No.', kind: 'count', sq: 'HRMNUM?', lim: [2, 10]},
+  HRMFND: {name: 'Fund Freq', kind: 'freq', sq: 'HRMFND?'},
+  SPRTBL: {name: 'Spur Table', kind: 'count', sq: 'SPRTBL?', lim: [1, 3]},
+  EYESMP: {name: 'Eye Samples', kind: 'count', sq: 'EYESMP?', lim: [2, 999]},
+  CNAVG: {name: 'C/N Avg Count', kind: 'count', sq: 'CNAVG?', lim: [1, 999]},
+  PJSRTO: {name: 'PJ Start Offset', kind: 'freq', sq: 'PJSRTO?'},
+  PJSTPO: {name: 'PJ Stop Offset', kind: 'freq', sq: 'PJSTPO?'},
+  PJAVG: {name: 'PJ Avg Count', kind: 'count', sq: 'PJAVG?', lim: [1, 999]},
+  IMODR: {name: 'IM Order', kind: 'count', sq: 'IMODR?', lim: [3, 9], stepf: (v, d) => v + 2 * d},
+  IMLS3: {name: 'IM Limit 3rd', kind: 'db', sq: 'IMLS3?'},
+  IMLS5: {name: 'IM Limit 5th', kind: 'db', sq: 'IMLS5?'},
+  IMLS7: {name: 'IM Limit 7th', kind: 'db', sq: 'IMLS7?'},
+  IMLS9: {name: 'IM Limit 9th', kind: 'db', sq: 'IMLS9?'},
+  IMAVG: {name: 'IM Avg Count', kind: 'count', sq: 'IMAVG?', lim: [1, 999]},
+  REG: {name: 'Register No.', kind: 'count', sq: 'REG', local: true, lim: [0, 10]},
+};
+for (const k in P) if (P[k].sq !== undefined && !P[k].key && P[k].sq) P[k].key = '@' + P[k].sq;   // '@Q?' = value in st
+const pget = (id, m) => {
+  const p = P[id];
+  if (p.sq) return p.local ? stNum(p.sq) ?? 0 : stNum(p.sq);
+  return p.key ? (id === 'MK' && !m.mkr ? null : m[p.key]) : null;
+};
+const reg2 = () => String(Math.max(0, Math.min(10, Math.round(stNum('REG') ?? 0)))).padStart(2, '0');
+
+// ── function keys and their soft-key menus ──────────────────────────────────
+// soft key: {p: param}            → activates numeric entry / jog
+//           {lbl, code, val, on}  → sends the GPIB code (code may depend on meta / st)
+//           {hdr: [en, ja]}       → group heading
+//           cf: [en, ja]          → confirmation before sending
+const AUTO = (lbl, code, key) => ({lbl, code, val: m => m[key] ? 'AUTO' : 'MNL', on: m => !!m[key]});
+const TOGGLE = (lbl, code, isOn) => ({lbl, code: m => code + (isOn(m) ? ' OFF' : ' ON'), val: m => isOn(m) ? 'ON' : 'OFF', on: isOn});
+const SEL = (lbl, code, isOn) => ({lbl, code, on: isOn});
+// state-query based variants: sq = query whose reply is compared
+const TOGST = (lbl, code, sq, onv = '1') => ({lbl, code: () => code + (st[sq] === onv ? ' OFF' : ' ON'),
+  val: () => st[sq] == null ? '' : st[sq] === onv ? 'ON' : 'OFF', on: () => st[sq] === onv});
+const SELST = (lbl, code, sq, v) => ({lbl, code, on: () => st[sq] === v});
+const HDR = (en, ja) => ({hdr: [en, ja]});
+const CALW = ['Calibration takes a while; the capture pauses until it is finished. Run it?', '校正には時間がかかり、その間は取り込みが止まります。実行しますか？'];
+const MENUS = {
+  FREQ:   [{p: 'CF'}, {p: 'FA'}, {p: 'FB'}, {p: 'CS'}, AUTO('CF Step AUTO', 'CA', 'cfstep_auto'),
+           HDR('Offset', 'オフセット'), {p: 'FO'}, TOGST('Freq Offset', 'FO', 'FOON?'),
+           HDR('Preselector', 'プリセレクタ'), {lbl: 'Presel Auto Tune', code: 'PPA'}, {p: 'PPM'},
+           SELST('Presel 1.6 GHz', 'PRESL STD', 'PRESL?', '0'), SELST('Presel 3.6 GHz', 'PRESL EXTD', 'PRESL?', '1'),
+           HDR('Band', 'バンド'), {p: 'BND'}, TOGST('Band Lock', 'BNDLC', 'BNDLC?')],
+  SPAN:   [{p: 'SP'}, {lbl: 'Full Span', code: 'FS'}, {lbl: 'Zero Span', code: 'ZS'}, {lbl: 'Last Span', code: 'LS'}],
+  LEVEL:  [{p: 'RL'}, {p: 'DD'}, SEL('10 dB/div', 'DD 10DB', m => m.ddiv === 10 && !lin(m)), SEL('5 dB/div', 'DD 5DB', m => m.ddiv === 5 && !lin(m)),
+           SEL('2 dB/div', 'DD 2DB', m => m.ddiv === 2 && !lin(m)), SEL('1 dB/div', 'DD 1DB', m => m.ddiv === 1 && !lin(m)),
+           SEL('0.5 dB/div', 'DD 0.5DB', m => m.ddiv === 0.5 && !lin(m)),
+           HDR('Linear scale', 'リニアスケール'), SELST('Linear ×1', 'LL1', 'LL?', '0'), SELST('Linear ×2', 'LL2', 'LL?', '1'),
+           SELST('Linear ×5', 'LL5', 'LL?', '2'), SELST('Linear ×10', 'LL10', 'LL?', '3'),
+           HDR('Units', '単位'), SELST('dBm', 'AUNITS DBM', 'AUNITS?', '0'), SELST('dBmV', 'AUNITS DBMV', 'AUNITS?', '1'),
+           SELST('dBµV', 'AUNITS DBUV', 'AUNITS?', '2'), SELST('dBµV emf', 'AUNITS DBEMF', 'AUNITS?', '3'),
+           SELST('dBpW', 'AUNITS DBPW', 'AUNITS?', '4'), SELST('W', 'AUNITS W', 'AUNITS?', '5'), SELST('V', 'AUNITS V', 'AUNITS?', '6'),
+           HDR('Offset / correction', 'オフセット・補正'), {p: 'RO'}, TOGST('Ref Offset', 'RO', 'ROON?'), TOGST('Level Correction', 'CR', 'CR?')],
+  ATT:    [{p: 'AT'}, AUTO('ATT AUTO', 'AA', 'att_auto'), {p: 'ATMIN'}, TOGST('Min ATT', 'ATMIN', 'ATMINON?')],
+  COUPLE: [{p: 'RB'}, AUTO('RBW AUTO', 'BA', 'rbw_auto'), {p: 'VB'}, AUTO('VBW AUTO', 'VA', 'vbw_auto'),
+           {p: 'SW'}, AUTO('SWT AUTO', 'AS', 'swt_auto'), {lbl: 'ALL AUTO', code: 'AL'},
+           HDR('Coupling ratios', '連動比'), {p: 'CORS'}, TOGST('RBW:SPAN', 'CORS', 'CORSON?'), {p: 'COVR'}, TOGST('VBW:RBW', 'COVR', 'COVRON?'),
+           HDR('PLL bandwidth', 'PLL 帯域'), SELST('PLL Auto', 'PLLBW AUTO', 'PLLBW?', '0'), SELST('PLL Narrow', 'PLLBW NARW', 'PLLBW?', '1'),
+           SELST('PLL Medium', 'PLLBW MID', 'PLLBW?', '2'), SELST('PLL Wide', 'PLLBW WIDE', 'PLLBW?', '3'),
+           HDR('RBW ≤ 100 Hz', 'RBW ≤ 100 Hz'), SELST('Digital RBW', 'DRBW ON', 'DRBW?', '1'), SELST('Analog RBW', 'DRBW OFF', 'DRBW?', '0')],
+  SWP:    [{p: 'SW'}, AUTO('SWT AUTO', 'AS', 'swt_auto'), {lbl: 'Sweep Reset', code: 'SR'}, TOGST('Window Sweep', 'WDOSWP', 'WDOSWP?'),
+           HDR('Trigger', 'トリガ'),
+           SEL('Trig Free Run', 'TRGSRC FREE', m => m.trg === 0), SEL('Trig Video ⚠', 'TRGSRC VIDEO', m => m.trg === 2),
+           SEL('Trig Line', 'TRGSRC LINE', m => m.trg === 1), SEL('Trig Ext ⚠', 'TRGSRC EXT', m => m.trg === 3),
+           SELST('Slope +', 'TRGSLP RISE', 'TRGSLP?', '1'), SELST('Slope −', 'TRGSLP FALL', 'TRGSLP?', '0'),
+           {p: 'TRGLVL'}, {p: 'TRGDT'},
+           HDR('Gated sweep', 'ゲート掃引'), TOGST('Gated Sweep', 'GTSWP', 'GTSWP?'), {p: 'GTPOS'}, {p: 'GTWID'},
+           SELST('Gate Src Ext', 'GTSRC EXT', 'GTSRC?', '0'), SELST('Gate Src IF', 'GTSRC IF', 'GTSRC?', '1'),
+           SELST('Gate Src RF', 'GTSRC RF', 'GTSRC?', '2'), SELST('Gate Ext In', 'GTSRC EGT', 'GTSRC?', '3')],
+  'TRACE A': [SEL('Write A', 'AW', m => lo(m.ta) === 0), SEL('View A', 'AV', m => lo(m.ta) === 1), SEL('Blank A', 'AB', m => lo(m.ta) === 2),
+           TOGGLE('Max Hold A', 'AMAX', m => hi(m.ta) === 1), TOGGLE('Min Hold A', 'AMIN', m => hi(m.ta) === 3),
+           TOGGLE('Average A', 'AAVG', m => hi(m.ta) === 2), TOGST('Power Avg A', 'APAVG', 'APAVG?'), {p: 'SWPCNT'},
+           TOGST('Normalize A', 'ANORM', 'ANORM?'), {lbl: 'Normalize Store', code: 'AR'}, {lbl: 'Clear A', code: 'CWA'},
+           SELST('Active: A', 'ACTRC TRA', 'ACTRC?', '0'), SELST('Active: B', 'ACTRC TRB', 'ACTRC?', '1'),
+           HDR('Detector', '検波'),
+           SEL('Det Normal', 'DET NRM', m => m.det === 0), SEL('Det Pos', 'DET POS', m => m.det === 1),
+           SEL('Det Neg', 'DET NEG', m => m.det === 2), SEL('Det Sample', 'DET SMP', m => m.det === 3),
+           SELST('Det Select AUTO', 'DETSEL AUTO', 'DETSEL?', '1'), SELST('Det Select MNL', 'DETSEL MNL', 'DETSEL?', '0'),
+           HDR('XY cursor / analog', 'XY カーソル・アナログ表示'), TOGST('XY Cursor', 'XYCSR', 'XYCSR?'), {p: 'CSRX'}, {p: 'CSRY'},
+           {lbl: 'Set Anchor', code: 'SETANC'}, {lbl: 'Remove Anchor', code: 'RLSANC'},
+           TOGST('Artificial Analog', 'ANLG', 'ANLG?'), {p: 'ANLGTM'}],
+  'TRACE B': [SEL('Write B', 'BW', m => lo(m.tb) === 0), SEL('View B', 'BV', m => lo(m.tb) === 1), SEL('Blank B', 'BB', m => lo(m.tb) === 2),
+           TOGGLE('Max Hold B', 'BMAX', m => hi(m.tb) === 1), TOGGLE('Min Hold B', 'BMIN', m => hi(m.tb) === 3),
+           TOGGLE('Average B', 'BAVG', m => hi(m.tb) === 2), TOGST('Power Avg B', 'BPAVG', 'BPAVG?'), {p: 'SWPCNT'},
+           TOGST('Normalize B', 'BNORM', 'BNORM?'), {lbl: 'Normalize Store', code: 'BR'},
+           {lbl: 'A ⇄ B', code: 'ACHB'}, {lbl: 'Clear B', code: 'CWB'},
+           HDR('Detector', '検波'),
+           SEL('Det Normal', 'DETB NRM', m => m.detb === 0), SEL('Det Pos', 'DETB POS', m => m.detb === 1),
+           SEL('Det Neg', 'DETB NEG', m => m.detb === 2), SEL('Det Sample', 'DETB SMP', m => m.detb === 3)],
+  FORMAT: [{p: 'DL'}, TOGGLE('Display Line', 'DL', m => !!m.dlon),
+           HDR('Limit lines', 'リミットライン'), TOGST('Limit 1', 'LMTA', 'LMTA?'), TOGST('Limit 2', 'LMTB', 'LMTB?'),
+           SELST('L1 Pass Above', 'LARNG ABOVE', 'LARNG?', '0'), SELST('L1 Pass Below', 'LARNG BELOW', 'LARNG?', '1'),
+           SELST('L2 Pass Above', 'LBRNG ABOVE', 'LBRNG?', '0'), SELST('L2 Pass Below', 'LBRNG BELOW', 'LBRNG?', '1'),
+           SELST('Type Freq', 'LIMTYP FREQ', 'LIMTYP?', '0'), SELST('Type Time', 'LIMTYP TIME', 'LIMTYP?', '1'),
+           SELST('X Absolute', 'LIMPOS ABS', 'LIMPOS?', '0'), SELST('X Relative', 'LIMPOS REL', 'LIMPOS?', '1'),
+           {lbl: 'X Ref Left', code: 'LIMXREF LEFT'}, {lbl: 'X Ref Center', code: 'LIMXREF CENT'},
+           SELST('Y Absolute', 'LIMAPOS ABS', 'LIMAPOS?', '0'), SELST('Y Relative', 'LIMAPOS REL', 'LIMAPOS?', '1'),
+           {lbl: 'Y Ref Top', code: 'LIMYREF TOP'}, {lbl: 'Y Ref Bottom', code: 'LIMYREF BOTM'},
+           {p: 'LIMSFT'}, {p: 'LIMASFT'}, {lbl: 'Limit Auto Adjust', code: 'LMSFAT'},
+           TOGST('Pass/Fail', 'PFC', 'PFC?'),
+           HDR('Display', '表示'), SELST('Result Low-Right', 'RESPOS LOW', 'RESPOS?', '0'), SELST('Result Up-Left', 'RESPOS UP', 'RESPOS?', '1'),
+           {lbl: 'Delete Label', code: 'LOF'}],
+  WINDOW: [TOGGLE('Window', 'WDO', m => !!m.wdo), {p: 'WLX'}, {p: 'WDX'},
+           SEL('Zoom', 'MLTSCR ZM', m => m.mltscr === 1), SEL('F/T', 'MLTSCR FT', m => m.mltscr === 2),
+           SEL('T/T', 'MLTSCR TT', m => m.mltscr === 3), SEL('Screen OFF', 'MLTSCR OFF', m => m.mltscr === 0),
+           {lbl: 'Zoom ON', code: 'ZMON'}, {lbl: 'Zoom OFF', code: 'ZMOFF'}, {p: 'ZMPOS'}, {p: 'ZMWID'},
+           {lbl: 'Zoom Max Peak', code: 'PKZMX'}, {lbl: 'Zoom Next Peak', code: 'PKZMN'}, {lbl: 'Zoom 3rd Peak', code: 'PKZM3'},
+           SELST('Upper Screen', 'SCRSEL TRA', 'SCRSEL?', '0'), SELST('Lower Screen', 'SCRSEL TRB', 'SCRSEL?', '1')],
+  MKR:    [{p: 'MK'}, {lbl: 'Delta Marker', code: 'MKD'}, {lbl: 'Marker OFF', code: 'MKOFF'},
+           TOGST('Fixed Marker', 'FX', 'FX?'), TOGST('1/Delta', 'REDLT', 'REDLT?'), TOGST('Signal Track', 'SG', 'SG?'),
+           {p: 'MPM'}, SELST('Mkr Step AUTO', 'MPA', 'MPA?', '1'),
+           SELST('Mkr on Trace A', 'MKTRACE TRA', 'MKTRACE?', '1'), SELST('Mkr on Trace B', 'MKTRACE TRB', 'MKTRACE?', '2'),
+           HDR('Marker coupling', 'マーカ連動'), SELST('Couple OFF', 'CPLMK OFF', 'CPLMK?', '0'), SELST('Couple Delta', 'CPLMK DLT', 'CPLMK?', '1'),
+           SELST('Couple Anchor', 'CPLMK ANC', 'CPLMK?', '2'), SELST('Couple Limit', 'CPLMK LLIN', 'CPLMK?', '3'),
+           SELST('Couple Disp Line', 'CPLMK DLIN', 'CPLMK?', '4'), SELST('Couple Trace A', 'CPLMK TRA', 'CPLMK?', '5'),
+           HDR('Multi marker / peak list', 'マルチマーカ・ピークリスト'), TOGST('Multi Marker', 'MLT', 'MLT?'),
+           SEL('Peak List Freq', 'PLS FREQ', () => plsMode === 'FREQ'), SEL('Peak List Level', 'PLS LEVEL', () => plsMode === 'LEVEL'),
+           SEL('Peak List OFF', 'PLS OFF', () => !plsMode)],
+  SRCH:   [{lbl: 'Peak Search', code: 'PS'}, {lbl: 'Next Peak', code: 'NXP'}, {lbl: 'Next Left', code: 'NXL'},
+           {lbl: 'Next Right', code: 'NXR'}, {lbl: 'Min Search', code: 'MIS'}, {lbl: 'Next Min', code: 'NXM'},
+           TOGST('Continuous Peak', 'CP', 'CP?'), {p: 'DY'},
+           HDR('Search condition: X range', 'サーチ条件: X 範囲'), SELST('X: All', 'MKSX ALL', 'MKSX?', '0'), SELST('X: Inner', 'MKSX IN', 'MKSX?', '1'),
+           SELST('X: Outer', 'MKSX OUT', 'MKSX?', '2'), {p: 'MKSPOS'}, {p: 'MKSWID'}, TOGST('Couple to F', 'MKSCPL', 'MKSCPL?'),
+           HDR('Search condition: Y range', 'サーチ条件: Y 範囲'), SELST('Y: All', 'MKSY ALL', 'MKSY?', '0'),
+           SELST('Y: Disp Line', 'MKSY DLIN', 'MKSY?', '1'), SELST('Y: Limit Line', 'MKSY LLIN', 'MKSY?', '2'),
+           SELST('Disp Line: Above', 'MKSYDL ABOVE', 'MKSYDL?', '0'), SELST('Disp Line: Below', 'MKSYDL BELOW', 'MKSYDL?', '1'),
+           SELST('Limit 1: Above', 'MKSYLA ABOVE', 'MKSYLA?', '0'), SELST('Limit 1: Below', 'MKSYLA BELOW', 'MKSYLA?', '1'),
+           SELST('Limit 2: Above', 'MKSYLB ABOVE', 'MKSYLB?', '0'), SELST('Limit 2: Below', 'MKSYLB BELOW', 'MKSYLB?', '1')],
+  'MKR→': [{lbl: 'Marker → CF', code: 'MKCF'}, {lbl: 'Marker → Ref', code: 'MKRL'}, {lbl: 'Marker → CF Step', code: 'MKCS'},
+           {lbl: 'Peak → CF', code: 'PKCF'}, {lbl: 'Peak → Ref', code: 'PKRL'}, {lbl: 'Mkr → Mkr Step', code: 'MKMKS'},
+           {lbl: 'ΔMkr → Span', code: 'MTSP'}, {lbl: 'ΔMkr → CF', code: 'MTCF'}, {lbl: 'ΔMkr → CF Step', code: 'MTCS'},
+           {lbl: 'ΔMkr → Mkr Step', code: 'MTMKS'}],
+  MEAS:   [HDR('X dB down', 'X dB ダウン'), {p: 'MKBW'}, {lbl: 'X dB Down', code: 'XDB'}, {lbl: 'X dB Left', code: 'XDL'},
+           {lbl: 'X dB Right', code: 'XDR'}, SELST('Relative', 'DC0', 'DC?', '0'), SELST('Abs Left', 'DC1', 'DC?', '1'),
+           SELST('Abs Right', 'DC2', 'DC?', '2'), TOGST('Continuous dB Dn', 'CDB', 'CDB?'),
+           HDR('Counter', 'カウンタ'), TOGST('Counter', 'COUNT', 'COUNT?'), SELST('Res 1 kHz', 'CN0', 'CN?', '0'),
+           SELST('Res 100 Hz', 'CN1', 'CN?', '1'), SELST('Res 10 Hz', 'CN2', 'CN?', '2'), SELST('Res 1 Hz', 'CN3', 'CN?', '3'),
+           HDR('Noise / Hz', 'ノイズ / Hz'), SELST('dBm/Hz', 'NIM', 'NION?', '1'), SELST('dBµV/√Hz', 'NIU', 'NION?', '2'),
+           SELST('dBc/Hz', 'NIC', 'NION?', '3'), SELST('Noise/Hz OFF', 'NIF', 'NION?', '0'),
+           HDR('Other', 'その他'), {lbl: 'Fixed Mkr Peak', code: 'FXPK'}, {lbl: '3rd Order IM', code: 'PKTHIRD'},
+           TOGST('%AM', 'AMMOD', 'AMMODON?')],
+  POWER:  [{lbl: 'Channel Power', code: 'PWCH'}, {lbl: 'Total Power', code: 'PWTOTAL'}, {lbl: 'Average Power', code: 'PWAVG'},
+           {lbl: 'Power Meas OFF', code: 'PWM'}, {p: 'PWTM'}, {p: 'WLX'}, {p: 'WDX'},
+           HDR('ACP', 'ACP（隣接チャネル漏洩電力）'), TOGST('ACP', 'ACP', 'ACPON?'), {p: 'ACPAVG'},
+           SELST('Param Default', 'ACPST USR', 'ACPST?', '1'), SELST('Param Manual', 'ACPST MNL', 'ACPST?', '2'),
+           {lbl: 'Define → Default', code: 'ACPST DEF'},
+           SELST('Screen Full', 'ACPSCR FULL', 'ACPSCR?', '0'), SELST('Screen Sepa', 'ACPSCR SEPA', 'ACPSCR?', '1'),
+           SELST('Screen Carrier', 'ACPSCR CARR', 'ACPSCR?', '2'), TOGST('ACP Graph', 'ADG', 'ADG?'),
+           {p: 'SYMRT'}, {p: 'RFACT'}, TOGST('√Nyquist Filter', 'NQST', 'NQST?'), TOGST('BS Window', 'ACPBSW', 'ACPBSW?')],
+  UTIL:   [HDR('OBW', 'OBW（占有帯域幅）'), TOGST('OBW', 'OBW', 'OBWON?'), {p: 'OBWPER'}, {p: 'AVGOBW'},
+           SELST('OBW Default', 'OBWST USR', 'OBWST?', '1'), SELST('OBW Manual', 'OBWST MNL', 'OBWST?', '2'),
+           HDR('Harmonics', '高調波'), TOGST('Harmonics', 'HARM', 'HARMON?'), {p: 'HRMNUM'}, {p: 'HRMFND'},
+           TOGST('Fund Freq', 'HRMFND', 'HRMFNDON?'),
+           HDR('Spurious', 'スプリアス'), TOGST('Spurious', 'SPURI', 'SPURION?'), {p: 'SPRTBL'},
+           HDR('Eye opening', 'アイ開口率'), TOGST('Eye Opening', 'EYEOPN', 'EYEOPNON?'), {p: 'EYESMP'},
+           {lbl: 'Auto Y Cursor', code: 'EYEAMPM'}, TOGST('Jitter Comp', 'EYECOR', 'EYECOR?'),
+           HDR('C/N (phase noise)', 'C/N（位相雑音）'), TOGST('C/N Meas', 'CNIS', 'CNISON?'), TOGST('C/N Sig Track', 'CNSIG', 'CNSIG?'), {p: 'CNAVG'},
+           HDR('Phase jitter', '位相ジッタ'), TOGST('Phase Jitter', 'PJIT', 'PJITON?'), {p: 'PJSRTO'}, {p: 'PJSTPO'},
+           TOGST('PJ Sig Track', 'PJSIG', 'PJSIG?'), {p: 'PJAVG'},
+           HDR('IM', 'IM（相互変調）'), TOGST('IM Meas', 'IMM', 'IMMON?'), {p: 'IMODR'}, {p: 'IMLS3'}, {p: 'IMLS5'},
+           {p: 'IMLS7'}, {p: 'IMLS9'}, TOGST('IM Pass/Fail', 'IMPFC', 'IMPFC?'), {p: 'IMAVG'}, TOGST('IM Hi Sense', 'IMHS', 'IMHS?')],
+  CAL:    [{lbl: 'Cal ALL', code: 'CLALL', cf: CALW}, {lbl: 'Total Gain Cal', code: 'CLGAIN', cf: CALW},
+           {lbl: 'Input ATT Cal', code: 'CLATT', cf: CALW}, {lbl: 'IF Step AMP Cal', code: 'CLSTEP', cf: CALW},
+           {lbl: 'RBW Switch Cal', code: 'CLRBW', cf: CALW}, {lbl: 'Log Linearity Cal', code: 'CLLOG', cf: CALW},
+           {lbl: 'Amplitude MAG Cal', code: 'CLMAG', cf: CALW}, {lbl: 'PBW Cal', code: 'CLPBW', cf: CALW},
+           TOGST('Freq Corr', 'FC', 'FC?'), TOGST('Cal Corr', 'CC', 'CC?')],
+  CONFIG: [SEL('501 Points', 'TPS', m => m.npts === 501), SEL('1001 Points', 'TPL', m => m.npts === 1001),
+           TOGST('Annotation', 'ANNOT', 'ANNOT?')],
+  SAVE:   [{p: 'REG'}, {lbl: 'Save to REG', code: () => 'SV REG_' + reg2(), val: () => 'REG_' + reg2(),
+            cf: ['Save the current settings to the selected register?', '現在の設定を選択したレジスタに保存しますか？']},
+           {lbl: 'Delete REG', code: () => 'DEL REG_' + reg2(), val: () => 'REG_' + reg2(),
+            cf: ['Delete the selected register?', '選択したレジスタを削除しますか？']}],
+  RCL:    [{p: 'REG'}, {lbl: 'Recall REG', code: () => 'RC REG_' + reg2(), val: () => 'REG_' + reg2(),
+            cf: ['Recall the settings from the selected register?', '選択したレジスタから設定を呼び出しますか？']}],
+  PRESET: [{lbl: 'Instrument Preset', code: 'IP',
+            cf: ['Preset the R3267? All settings return to the factory defaults.', 'R3267 をプリセットしますか？ すべての設定が初期状態に戻ります。']}],
+};
+// Soft-key states each menu needs (read on opening the menu, after each key, and every 4 s).
+// A value may be an array of query strings (max 24 queries per request).
+const MENU_Q = {
+  FREQ: 'FO? FOON? PPM? PRESL? BND? BNDLC?', LEVEL: 'LL? AUNITS? RO? ROON? CR?', ATT: 'ATMIN? ATMINON?',
+  COUPLE: 'CORS? CORSON? COVR? COVRON? PLLBW? DRBW?', SWP: 'WDOSWP? TRGSLP? TRGLVL? TRGDT? GTSWP? GTPOS? GTWID? GTSRC?',
+  'TRACE A': 'APAVG? ANORM? ACTRC? DETSEL? XYCSR? CSRX? CSRY? ANLG?', 'TRACE B': 'BPAVG? BNORM?',
+  FORMAT: 'LMTA? LMTB? LARNG? LBRNG? LIMTYP? LIMPOS? LIMAPOS? PFC? RESPOS?', WINDOW: 'WLX? WDX? ZMPOS? ZMWID? SCRSEL?',
+  MKR: 'FX? REDLT? SG? MPM? MPA? MKTRACE? CPLMK? MLT?', SRCH: 'CP? DY? MKSX? MKSY? MKSPOS? MKSWID? MKSCPL? MKSYDL? MKSYLA? MKSYLB?',
+  MEAS: 'MKBW? DC? CDB? COUNT? CN? NION? AMMODON?',
+  POWER: 'PWTM? WLX? WDX? PWCHON? PWTOTALON? PWAVGON? ACPON? ACPAVG? ACPST? ACPSCR? ADG? SYMRT? RFACT? NQST? ACPBSW? CARRBS?',
+  UTIL: ['OBWON? OBWPER? AVGOBW? OBWST? HARMON? HRMNUM? HRMFND? HRMFNDON? SPURION? SPRTBL? EYEOPNON? EYESMP? EYECOR?',
+         'CNISON? CNSIG? CNAVG? PJITON? PJSRTO? PJSTPO? PJSIG? PJAVG? IMMON? IMODR? IMLS3? IMLS5? IMLS7? IMLS9? IMPFC? IMAVG? IMHS?'],
+  CAL: 'FC? CC?', CONFIG: 'ANNOT?',
+};
+// Measurement results shown in the RESULT box while the menu is open
+// f: freq | level | pct | raw | list (n lines "a,b") ; on: poll only when the mode is on
+const ON1 = q => () => st[q] === '1';
+const MENU_RES = {
+  'TRACE A': [{q: 'CSRDX?', lbl: ['XY cursor ΔX', 'XY カーソル ΔX'], f: ['freq'], on: ON1('XYCSR?')},
+              {q: 'CSRDY?', lbl: ['XY cursor ΔY', 'XY カーソル ΔY'], f: ['db'], on: ON1('XYCSR?')}],
+  FORMAT: [{q: 'PFJ?', lbl: ['Pass/Fail', 'Pass/Fail 判定'], f: ['pf'], on: ON1('PFC?')}],
+  MKR:    [{q: 'MF?', lbl: ['Marker freq', 'マーカ周波数'], f: ['freq'], on: () => meta && meta.mkr},
+           {q: 'ML?', lbl: ['Marker level', 'マーカレベル'], f: ['level'], on: () => meta && meta.mkr},
+           {q: 'PKLST?', lbl: ['Peak list', 'ピークリスト'], f: ['list', 'freq', 'level'], cols: [['Frequency', '周波数'], ['Level', 'レベル']]}],
+  SRCH:   [{q: 'MF?', lbl: ['Marker freq', 'マーカ周波数'], f: ['freq'], on: () => meta && meta.mkr},
+           {q: 'ML?', lbl: ['Marker level', 'マーカレベル'], f: ['level'], on: () => meta && meta.mkr}],
+  MEAS:   [{q: 'MF?', lbl: ['Marker / X dB BW', 'マーカ / X dB 帯域幅'], f: ['freq'], on: () => meta && meta.mkr},
+           {q: 'ML?', lbl: ['Marker level', 'マーカレベル'], f: ['level'], on: () => meta && meta.mkr},
+           {q: 'CNRES?', lbl: ['Counter', 'カウンタ'], f: ['freq'], on: ON1('COUNT?')},
+           {q: 'NIRES?', lbl: ['Noise/Hz', 'ノイズ/Hz'], f: ['raw'], on: () => st['NION?'] != null && st['NION?'] !== '0'},
+           {q: 'AMMOD?', lbl: ['%AM', '%AM'], f: ['pct'], on: ON1('AMMODON?')}],
+  POWER:  [{q: 'PWCH?', lbl: ['Channel power', 'チャネル電力'], f: ['level', 'raw'], on: ON1('PWCHON?')},
+           {q: 'PWTOTAL?', lbl: ['Total power', '総電力'], f: ['level', 'raw'], on: () => st['PWTOTALON?'] === '2'},
+           {q: 'PWAVG?', lbl: ['Average power', '平均電力'], f: ['level', 'raw'], on: () => st['PWAVGON?'] === '3'},
+           {q: 'ACPREF?', lbl: ['ACP reference', 'ACP 基準電力'], f: ['level'], on: ON1('ACPON?')},
+           {q: 'ACP?', lbl: ['ACP (lower / upper)', 'ACP（下側 / 上側）'], f: ['list', 'freq', 'db', 'freq', 'db'], cols: [['Lower offset', '下側オフセット'], ['Lower', '下側'], ['Upper offset', '上側オフセット'], ['Upper', '上側']], on: ON1('ACPON?')}],
+  UTIL:   [{q: 'OBW?', lbl: ['OBW, Fc', 'OBW, 中心周波数'], f: ['freq', 'freq'], on: ON1('OBWON?')},
+           {q: 'HARM?', lbl: ['Harmonics', '高調波'], f: ['list', 'freq', 'level'], cols: [['Frequency', '周波数'], ['Level', 'レベル']], on: ON1('HARMON?')},
+           {q: 'EYEOPN?', lbl: ['Eye opening (amp, time)', 'アイ開口率（振幅, 時間）'], f: ['pct', 'pct'], on: ON1('EYEOPNON?')},
+           {q: 'CNIS?', lbl: ['C/N', 'C/N'], f: ['list', 'freq', 'raw'], cols: [['Offset', 'オフセット'], ['C/N', 'C/N']], on: ON1('CNISON?')},
+           {q: 'PJIT?', lbl: ['Carrier, SSB noise, jitter', 'キャリア, SSB 雑音, ジッタ'], f: ['level', 'raw', 'raw'], on: ON1('PJITON?')},
+           {q: 'IMMREF?', lbl: ['IM reference', 'IM 基準波'], f: ['freq', 'level'], on: ON1('IMMON?')},
+           {q: 'IMMRES?', lbl: ['IM result', 'IM 結果'], f: ['list', 'raw', 'raw', 'raw', 'raw'], on: ON1('IMMON?')}],
+};
+const lin = m => m && (m.aunits === 5 || m.aunits === 6);   // W / V units = linear display
+
+// ── hover help texts (shown after 3 s, see SESSION_JS): [English, 日本語] ──
+const L = x => Array.isArray(x) ? (LANG === 'ja' ? x[1] : x[0]) : (x || '');
+const FKEY_HELP = {
+  FREQ: ['Frequency: center, start/stop frequency and CF step.', '周波数設定。中心周波数・開始/終了周波数・CF ステップを設定します。'],
+  SPAN: ['Frequency span, plus Full / Zero / Last Span.', '周波数スパン設定。Full / Zero / Last Span も選べます。'],
+  LEVEL: ['Reference level (top of the screen) and vertical scale (dB/div).', 'レベル設定。基準レベル（画面最上部のレベル）と縦軸スケール（dB/div）。'],
+  ATT: ['Input attenuator (manual / AUTO).', '入力アッテネータの設定（手動 / AUTO）。'],
+  COUPLE: ['RBW, VBW and sweep time, each with AUTO coupling.', 'RBW・VBW・掃引時間の設定と、それぞれの AUTO 連動。'],
+  SWP: ['Sweep time, trigger source, gated sweep, sweep reset.', '掃引時間、トリガソース、ゲート掃引、掃引リセット。'],
+  'TRACE A': ['Trace A: write / view / blank, max/min hold, averaging, detector.', 'トレース A の書き込み/表示/ブランク、Max/Min Hold、平均化、検波モード。'],
+  'TRACE B': ['Trace B: write / view / blank, max/min hold, averaging, detector, A⇄B.\nShown in the browser too when not blank.', 'トレース B の書き込み/表示/ブランク、Max/Min Hold、平均化、検波モード、A⇄B 交換。\nブランク以外にするとブラウザにも表示されます。'],
+  FORMAT: ['Display line, limit lines, pass/fail judgement.', 'ディスプレイライン、リミットライン、Pass/Fail 判定。'],
+  WINDOW: ['Window, zoom and split screen on the R3267 display.', 'R3267 本体画面のウィンドウ表示・ズーム・画面分割。'],
+  MKR: ['Marker position, delta marker, marker off.', 'マーカの位置設定、デルタマーカ、マーカ OFF。'],
+  SRCH: ['Peak search (max peak, next peak, left/right peak, minimum).', 'ピークサーチ（最大ピーク・次のピーク・左右のピーク・最小値）。'],
+  'MKR→': ['Apply the marker position to center frequency, reference level, CF step, ...', 'マーカ位置を中心周波数・基準レベル・CF ステップなどに反映します。'],
+  MEAS: ['Measurements: X dB down, frequency counter, noise/Hz, 3rd-order IM, %AM. Results are shown in the RESULT box.', '測定機能: X dB ダウン、周波数カウンタ、ノイズ/Hz、3 次相互変調、%AM。結果は「測定結果」欄に表示されます。'],
+  POWER: ['Power measurements: channel / total / average power and ACP (adjacent channel power).', '電力測定: チャネル電力・総電力・平均電力、ACP（隣接チャネル漏洩電力）。'],
+  UTIL: ['Utility measurements: OBW, harmonics, spurious, eye opening, C/N, phase jitter, IM.', 'ユーティリティ測定: OBW、高調波、スプリアス、アイ開口率、C/N、位相ジッタ、IM。'],
+  CAL: ['Self calibration and correction on/off.', '自己校正と補正データの ON/OFF。'],
+  CONFIG: ['Number of trace points (501 / 1001) and screen annotation.', 'トレースポイント数（501 / 1001）、画面アノテーション表示。'],
+  SAVE: ['Save the settings to an internal register (REG 00-10), or delete one.', '設定を内部レジスタ（REG 00〜10）に保存／削除します。'],
+  RCL: ['Recall settings from an internal register (REG 00-10).', '内部レジスタ（REG 00〜10）から設定を呼び出します。'],
+  PRESET: ['Instrument preset (factory default settings).', '本体を初期設定に戻します（プリセット）。'],
+};
+const PARAM_HELP = {
+  CF: ['Center frequency', '中心周波数'], FA: ['Start frequency', '開始周波数'], FB: ['Stop frequency', '終了周波数'],
+  CS: ['Center frequency step (used by ↑↓)', '中心周波数のステップ幅（↑↓キーで使用）'], SP: ['Frequency span', '周波数スパン'],
+  RL: ['Reference level (top of the screen); enter with the +dBm / -dBm unit keys', '基準レベル（画面最上部）。単位キー +dBm / -dBm で符号付きで設定'],
+  DD: ['Vertical scale (dB/div)', '縦軸スケール（dB/div）'], AT: ['Input attenuation', '入力アッテネータ量'],
+  RB: ['Resolution bandwidth (RBW)', '分解能帯域幅（RBW）'], VB: ['Video bandwidth (VBW)', 'ビデオ帯域幅（VBW）'], SW: ['Sweep time', '掃引時間'],
+  SWPCNT: ['Number of sweeps for max/min hold and averaging (2-999)', 'Max/Min Hold・平均化の掃引回数（2〜999）'],
+  DL: ['Display line level (enter with +dBm / -dBm)', 'ディスプレイラインのレベル（+dBm / -dBm で設定）'],
+  WLX: ['Window center position', 'ウィンドウの中心位置'], WDX: ['Window width', 'ウィンドウの幅'],
+  MK: ['Marker frequency (you can also click on the trace)', 'マーカ周波数（波形をクリックしても移動できます）'],
+  FO: ['Frequency offset added to the displayed frequencies', '表示周波数に加えるオフセット'],
+  PPM: ['Preselector manual tuning (-100 … 100)', 'プリセレクタの手動同調（-100〜100）'],
+  BND: ['Frequency band number', '周波数バンド番号'],
+  RO: ['Reference level offset (e.g. external attenuator / amplifier)', '基準レベルオフセット（外部アッテネータ・アンプ分など）'],
+  ATMIN: ['Minimum attenuation that ATT AUTO may use', 'ATT AUTO 時に使用する最小アッテネータ量'],
+  CORS: ['RBW : span ratio used by RBW AUTO (0.001 … 0.1)', 'RBW AUTO 時の RBW : スパン比（0.001〜0.1）'],
+  COVR: ['VBW : RBW ratio used by VBW AUTO (0.003 … 3)', 'VBW AUTO 時の VBW : RBW 比（0.003〜3）'],
+  TRGLVL: ['Video trigger level (% of the screen)', 'ビデオトリガのレベル（画面の %）'],
+  TRGDT: ['Trigger delay time', 'トリガ遅延時間'], GTPOS: ['Gate position (delay from the trigger)', 'ゲート位置（トリガからの遅延）'],
+  GTWID: ['Gate width', 'ゲート幅'], ANLGTM: ['Artificial analog: sampling times (2 … 32)', '擬似アナログ表示のサンプリング回数（2〜32）'],
+  CSRX: ['XY cursor X position', 'XY カーソルの X 位置'], CSRY: ['XY cursor Y position', 'XY カーソルの Y 位置'],
+  LIMSFT: ['Limit line X offset', 'リミットラインの X 方向オフセット'], LIMASFT: ['Limit line Y offset', 'リミットラインの Y 方向オフセット'],
+  ZMPOS: ['Zoom window position', 'ズームウィンドウの位置'], ZMWID: ['Zoom window width', 'ズームウィンドウの幅'],
+  MPM: ['Marker step size (manual)', 'マーカのステップ幅（手動）'],
+  MKSPOS: ['Search window: center frequency (time from the left edge in zero span).', 'サーチウィンドウの中心周波数（ゼロスパンでは左端からの時間）。'],
+  MKSWID: ['Search window: width.', 'サーチウィンドウの幅。'],
+  DY: ['Peak definition: minimum peak height in divisions (0.1 … 10)', 'ピーク判定の最小高さ（div、0.1〜10）'],
+  MKBW: ['X value for X dB down (e.g. 3 dB, 6 dB)', 'X dB ダウンの X の値（例: 3 dB, 6 dB）'],
+  PWTM: ['Number of averages for power measurements', '電力測定の平均回数'], ACPAVG: ['Number of averages for ACP', 'ACP の平均回数'],
+  SYMRT: ['Symbol rate 1/T (for the √Nyquist filter)', 'シンボルレート 1/T（√ナイキストフィルタ用）'], RFACT: ['Roll-off factor α (0.01 … 0.99)', 'ロールオフ率 α（0.01〜0.99）'],
+  OBWPER: ['Power ratio for OBW (10 … 99.8 %)', 'OBW の電力比（10〜99.8 %）'], AVGOBW: ['Number of averages for OBW', 'OBW の平均回数'],
+  HRMNUM: ['Highest harmonic order to measure', '測定する高調波の次数'], HRMFND: ['Fundamental frequency for harmonics', '高調波測定の基本波周波数'],
+  SPRTBL: ['Spurious measurement table (1 … 3)', 'スプリアス測定テーブル番号（1〜3）'], EYESMP: ['Eye opening: number of samples', 'アイ開口率のサンプル数'],
+  CNAVG: ['C/N: number of averages', 'C/N の平均回数'], PJSRTO: ['Phase jitter: start offset frequency', '位相ジッタの開始オフセット周波数'],
+  PJSTPO: ['Phase jitter: stop offset frequency', '位相ジッタの終了オフセット周波数'], PJAVG: ['Phase jitter: number of averages', '位相ジッタの平均回数'],
+  IMODR: ['IM: highest order (3, 5, 7, 9)', 'IM の次数（3, 5, 7, 9）'], IMLS3: ['IM pass/fail limit, 3rd order', 'IM 判定値（3 次）'],
+  IMLS5: ['IM pass/fail limit, 5th order', 'IM 判定値（5 次）'], IMLS7: ['IM pass/fail limit, 7th order', 'IM 判定値（7 次）'],
+  IMLS9: ['IM pass/fail limit, 9th order', 'IM 判定値（9 次）'], IMAVG: ['IM: number of averages', 'IM の平均回数'],
+  REG: ['Register number 0 … 10 (kept in the browser; used by Save / Recall / Delete)', 'レジスタ番号 0〜10（ブラウザ内で保持し、保存・呼出・削除に使用）'],
+};
+const SOFT_HELP = {
+  CA: ['Return the CF step to AUTO (coupled to span).', 'CF ステップを AUTO（スパン連動）に戻します。'],
+  FS: ['Full span.', 'フルスパンにします。'], ZS: ['Zero span (time domain).', 'ゼロスパン（時間軸表示）にします。'],
+  LS: ['Back to the previous span.', '直前のスパンに戻します。'], AA: ['Attenuator AUTO (coupled to reference level).', 'アッテネータを AUTO（基準レベル連動）にします。'],
+  BA: ['RBW AUTO (coupled to span).', 'RBW を AUTO（スパン連動）にします。'], VA: ['VBW AUTO (coupled to RBW).', 'VBW を AUTO（RBW 連動）にします。'],
+  AS: ['Sweep time AUTO.', '掃引時間を AUTO にします。'], AL: ['Set RBW, VBW, sweep time and ATT all to AUTO.', 'RBW・VBW・掃引時間・ATT をすべて AUTO にします。'],
+  'TRGSRC FREE': ['Free run (continuous sweep without trigger). Normally use this.', 'フリーラン（トリガなしで連続掃引）。通常はこれを使います。'],
+  'TRGSRC VIDEO': ['Video trigger. ⚠ Without a trigger signal the sweep stops and the capture only reads the current trace.', 'ビデオトリガ。⚠ トリガ信号がないと掃引が止まり、取り込みは現在のトレースの読み出しのみになります。'],
+  'TRGSRC LINE': ['Power-line synchronised trigger.', '電源ライン同期トリガ。'],
+  'TRGSRC EXT': ['External trigger. ⚠ Without a trigger signal the sweep stops.', '外部トリガ。⚠ トリガ信号がないと掃引が止まります。'],
+  'GTSWP ON': ['Gated sweep on.', 'ゲート掃引を ON にします。'], 'GTSWP OFF': ['Gated sweep off.', 'ゲート掃引を OFF にします。'],
+  SR: ['Reset the sweep and start from the beginning.', '掃引をリセットして最初から開始します。'],
+  AW: ['Trace A write mode (updated every sweep).', 'トレース A を書き込みモードにします（掃引ごとに更新）。'],
+  AV: ['Freeze trace A (view only).', 'トレース A の更新を止めて表示だけにします。'], AB: ['Hide trace A.', 'トレース A を非表示にします。'],
+  CWA: ['Clear trace A.', 'トレース A をクリアします。'],
+  AMAX: ['Hold the maximum of each point (max hold).', '各点の最大値を保持します（Max Hold）。'],
+  AMIN: ['Hold the minimum of each point (min hold).', '各点の最小値を保持します（Min Hold）。'],
+  AAVG: ['Average over the sweep count.', '掃引回数（Sweep Count）分の平均を表示します。'],
+  BW: ['Trace B write mode.', 'トレース B を書き込みモードにします。'], BV: ['Freeze trace B (view only).', 'トレース B の更新を止めて表示だけにします。'],
+  BB: ['Hide trace B (also stops capturing B).', 'トレース B を非表示にします（ブラウザへの B の取り込みも止まります）。'],
+  CWB: ['Clear trace B.', 'トレース B をクリアします。'], BMAX: ['Max hold on trace B.', 'トレース B で最大値を保持します。'],
+  BMIN: ['Min hold on trace B.', 'トレース B で最小値を保持します。'], BAVG: ['Averaging on trace B.', 'トレース B で平均化します。'],
+  ACHB: ['Exchange traces A and B.', 'トレース A と B の内容を入れ替えます。'],
+  DET: ['Detector (Normal / Positive / Negative / Sample).', '検波モード（Normal / Positive / Negative / Sample）。'],
+  DETB: ['Detector of trace B.', 'トレース B の検波モード。'],
+  DL: ['Display line (horizontal reference line) on/off.', 'ディスプレイライン（水平の基準線）の表示 ON/OFF。'],
+  'LMTA ON': ['Show limit line 1.', 'リミットライン 1 を表示します。'], 'LMTA OFF': ['Hide limit line 1.', 'リミットライン 1 を消します。'],
+  'LMTB ON': ['Show limit line 2.', 'リミットライン 2 を表示します。'], 'LMTB OFF': ['Hide limit line 2.', 'リミットライン 2 を消します。'],
+  'PFC ON': ['Pass/fail judgement with the limit lines on.', 'リミットラインによる Pass/Fail 判定を ON にします。'],
+  'PFC OFF': ['Pass/fail judgement off.', 'Pass/Fail 判定を OFF にします。'],
+  WDO: ['Window display on/off.', 'ウィンドウ表示の ON/OFF。'], 'MLTSCR ZM': ['Zoom display (R3267 screen).', 'ズーム表示（R3267 本体画面）。'],
+  'MLTSCR FT': ['Frequency / time split screen.', '周波数/時間の 2 画面表示。'], 'MLTSCR TT': ['Time / time split screen.', '時間/時間の 2 画面表示。'],
+  'MLTSCR OFF': ['Cancel the split screen.', '画面分割を解除します。'], ZMON: ['Zoom into the window.', 'ウィンドウ部分をズームします。'],
+  ZMOFF: ['Cancel the zoom.', 'ズームを解除します。'],
+  MKD: ['Delta marker (difference to the reference marker).', 'デルタマーカ（基準マーカとの差を表示）。'], MKOFF: ['Turn the marker off.', 'マーカを消します。'],
+  PS: ['Move the marker to the highest peak.', '最大ピークにマーカを移動します。'], NXP: ['Next highest peak.', '次に大きいピークへ移動します。'],
+  NXL: ['Next peak to the left.', '左側の次のピークへ移動します。'], NXR: ['Next peak to the right.', '右側の次のピークへ移動します。'],
+  MIS: ['Move the marker to the minimum.', '最小値へマーカを移動します。'],
+  MKCF: ['Marker frequency → center frequency.', 'マーカ周波数を中心周波数にします。'], MKRL: ['Marker level → reference level.', 'マーカのレベルを基準レベルにします。'],
+  MKCS: ['Marker frequency → CF step.', 'マーカ周波数を CF ステップにします。'],
+  PKCF: ['Highest peak → center frequency.', '最大ピークを中心周波数にします。'], PKRL: ['Highest peak level → reference level.', '最大ピークのレベルを基準レベルにします。'],
+  DD: ['Set the vertical scale directly.', '縦軸スケールを直接設定します。'],
+  FO: ['Frequency offset on/off.', '周波数オフセットの ON/OFF。'], PPA: ['Tune the preselector automatically.', 'プリセレクタを自動同調します。'],
+  PRESL: ['Preselector range (1.6 GHz / 3.6 GHz).', 'プリセレクタの切り替え周波数（1.6 GHz / 3.6 GHz）。'],
+  BNDLC: ['Lock the frequency band.', '周波数バンドを固定します。'],
+  LL1: ['Linear scale ×1 (units change to V).', 'リニアスケール ×1（単位は V になります）。'], LL2: ['Linear scale ×2.', 'リニアスケール ×2。'],
+  LL5: ['Linear scale ×5.', 'リニアスケール ×5。'], LL10: ['Linear scale ×10.', 'リニアスケール ×10。'],
+  AUNITS: ['Display unit of the reference level and markers.', '基準レベル・マーカ表示の単位。'],
+  RO: ['Reference level offset on/off.', '基準レベルオフセットの ON/OFF。'], CR: ['Level correction (correction table) on/off.', 'レベル補正（補正テーブル）の ON/OFF。'],
+  ATMIN: ['Min ATT on/off: ATT AUTO never goes below the Min ATT value.', 'Min ATT の ON/OFF。ON のとき ATT AUTO は Min ATT 値未満になりません。'],
+  CORS: ['Use the RBW:SPAN ratio for RBW AUTO.', 'RBW AUTO で RBW:SPAN 比を使用します。'], COVR: ['Use the VBW:RBW ratio for VBW AUTO.', 'VBW AUTO で VBW:RBW 比を使用します。'],
+  PLLBW: ['PLL bandwidth of the local oscillator.', '局部発振器の PLL 帯域幅。'],
+  DRBW: ['Digital or analog filter for RBW ≤ 100 Hz.', 'RBW ≤ 100 Hz で使用するフィルタ（デジタル / アナログ）。'],
+  WDOSWP: ['Sweep only inside the window.', 'ウィンドウ内だけを掃引します。'], TRGSLP: ['Trigger slope.', 'トリガスロープ。'],
+  GTSWP: ['Gated sweep on/off.', 'ゲート掃引の ON/OFF。'], GTSRC: ['Gate signal source.', 'ゲート信号源。'],
+  APAVG: ['Power averaging on trace A.', 'トレース A の電力平均。'], BPAVG: ['Power averaging on trace B.', 'トレース B の電力平均。'],
+  ANORM: ['Normalize trace A (subtract the stored correction).', 'トレース A を正規化（保存した補正値との差を表示）。'],
+  BNORM: ['Normalize trace B.', 'トレース B を正規化します。'], AR: ['Store the current trace as the normalization reference.', '現在のトレースを正規化の基準として保存します。'],
+  BR: ['Store the current trace B as the normalization reference.', '現在のトレース B を正規化の基準として保存します。'],
+  ACTRC: ['Select the active trace.', 'アクティブトレースを選択します。'], DETSEL: ['Detector selection AUTO / manual.', '検波モード選択の AUTO / 手動。'],
+  XYCSR: ['XY cursor on/off (ΔX / ΔY shown in the RESULT box).', 'XY カーソルの ON/OFF（ΔX / ΔY を測定結果欄に表示）。'],
+  SETANC: ['Set the XY cursor anchor.', 'XY カーソルのアンカーを設定します。'], RLSANC: ['Remove the anchor.', 'アンカーを解除します。'],
+  ANLG: ['Artificial analog display on/off.', '擬似アナログ表示の ON/OFF。'],
+  LMTA: ['Limit line 1 on/off.', 'リミットライン 1 の ON/OFF。'], LMTB: ['Limit line 2 on/off.', 'リミットライン 2 の ON/OFF。'],
+  LARNG: ['Pass range of limit line 1.', 'リミットライン 1 の合格範囲。'], LBRNG: ['Pass range of limit line 2.', 'リミットライン 2 の合格範囲。'],
+  LIMTYP: ['Limit line type (frequency / time domain).', 'リミットラインの種類（周波数 / 時間領域）。'],
+  LIMPOS: ['Limit line X position mode.', 'リミットラインの X 位置モード。'], LIMXREF: ['Limit line X reference.', 'リミットラインの X 基準位置。'],
+  LIMAPOS: ['Limit line Y position mode.', 'リミットラインの Y 位置モード。'], LIMYREF: ['Limit line Y reference.', 'リミットラインの Y 基準位置。'],
+  LMSFAT: ['Adjust the limit lines automatically.', 'リミットラインを自動調整します。'],
+  PFC: ['Pass/fail judgement on/off (result in the RESULT box).', 'Pass/Fail 判定の ON/OFF（結果は測定結果欄）。'],
+  RESPOS: ['Position of the result display on the R3267 screen.', 'R3267 画面上の結果表示位置。'], LOF: ['Delete the screen label.', '画面ラベルを消去します。'],
+  PKZMX: ['Zoom on the maximum peak.', '最大ピークをズームします。'], PKZMN: ['Zoom on the next peak.', '次のピークをズームします。'],
+  PKZM3: ['Zoom on the 3rd-order peak.', '3 次のピークをズームします。'], SCRSEL: ['Active screen in split mode.', '分割表示時のアクティブ画面。'],
+  FX: ['Fixed marker on/off.', '固定マーカの ON/OFF。'], REDLT: ['Show 1/Δ (reciprocal of the delta).', '1/Δ（デルタの逆数）を表示します。'],
+  SG: ['Signal track: keep the marked signal at the center.', 'シグナルトラック（マーカの信号を中心に保持）。'],
+  MPA: ['Marker step size AUTO.', 'マーカステップ幅を AUTO にします。'], MKTRACE: ['Trace the marker is placed on.', 'マーカを置くトレース。'],
+  CPLMK: ['Couple the marker to another item.', 'マーカを他の項目と連動させます。'], MLT: ['Multi marker on/off.', 'マルチマーカの ON/OFF。'],
+  PLS: ['Peak list display (sorted by frequency / level).', 'ピークリスト表示（周波数順 / レベル順）。'],
+  NXM: ['Next minimum.', '次の最小値へ移動します。'], CP: ['Continuous peak search on/off.', '連続ピークサーチの ON/OFF。'],
+  MKSX: ['Search range on the X axis: All, Inner (inside the search window) or Outer (outside it).\nThe window is drawn on the graph in violet.',
+         'X 軸のサーチ範囲: All（全体）、Inner（サーチウィンドウの内側）、Outer（外側）。\nウィンドウはグラフ上に紫で表示します。'],
+  MKSY: ['Search range on the Y axis: All, above / below the display line, or above / below the limit lines.',
+         'Y 軸のサーチ範囲: All（全体）、ディスプレイラインの上 / 下、リミットラインの上 / 下。'],
+  MKSCPL: ['Couple the search window to the frequency (moves with CF / span changes).', 'サーチウィンドウを周波数に連動させます（CF・スパン変更に追従）。'],
+  MKSYDL: ['With Y: Disp Line, search above or below the display line.', 'Y: Disp Line のとき、ディスプレイラインの上 / 下をサーチします。'],
+  MKSYLA: ['With Y: Limit Line, search above or below limit line 1.', 'Y: Limit Line のとき、リミットライン 1 の上 / 下をサーチします。'],
+  MKSYLB: ['With Y: Limit Line, search above or below limit line 2.', 'Y: Limit Line のとき、リミットライン 2 の上 / 下をサーチします。'],
+  MTSP: ['ΔMarker → span.', 'Δマーカ幅をスパンにします。'], MTCF: ['ΔMarker → center frequency.', 'Δマーカを中心周波数にします。'],
+  MTCS: ['ΔMarker → CF step.', 'Δマーカを CF ステップにします。'], MKMKS: ['Marker → marker step.', 'マーカ周波数をマーカステップにします。'],
+  MTMKS: ['ΔMarker → marker step.', 'Δマーカをマーカステップにします。'],
+  XDB: ['X dB down bandwidth around the marker.', 'マーカを中心に X dB ダウン帯域幅を測定します。'],
+  XDL: ['X dB down point on the left.', '左側の X dB ダウン点。'], XDR: ['X dB down point on the right.', '右側の X dB ダウン点。'],
+  DC0: ['X dB down: relative display.', 'X dB ダウン: 相対表示。'], DC1: ['X dB down: absolute (left).', 'X dB ダウン: 絶対表示（左）。'],
+  DC2: ['X dB down: absolute (right).', 'X dB ダウン: 絶対表示（右）。'], CDB: ['Continuous X dB down on/off.', '連続 X dB ダウンの ON/OFF。'],
+  COUNT: ['Frequency counter on/off (result in the RESULT box).', '周波数カウンタの ON/OFF（結果は測定結果欄）。'],
+  CN0: ['Counter resolution 1 kHz.', 'カウンタ分解能 1 kHz。'], CN1: ['Counter resolution 100 Hz.', 'カウンタ分解能 100 Hz。'],
+  CN2: ['Counter resolution 10 Hz.', 'カウンタ分解能 10 Hz。'], CN3: ['Counter resolution 1 Hz.', 'カウンタ分解能 1 Hz。'],
+  NIM: ['Noise/Hz in dBm/Hz.', 'ノイズ/Hz を dBm/Hz で表示。'], NIU: ['Noise/Hz in dBµV/√Hz.', 'ノイズ/Hz を dBµV/√Hz で表示。'],
+  NIC: ['Noise/Hz in dBc/Hz.', 'ノイズ/Hz を dBc/Hz で表示。'], NIF: ['Noise/Hz off.', 'ノイズ/Hz を OFF。'],
+  FXPK: ['Fixed marker → peak.', '固定マーカをピークに置きます。'], PKTHIRD: ['3rd-order intermodulation measurement.', '3 次相互変調ひずみを測定します。'],
+  AMMOD: ['%AM measurement on/off.', '%AM 測定の ON/OFF。'],
+  PWCH: ['Channel power in the window (WLX / WDX); the window is shown on the graph (yellow).', 'ウィンドウ（WLX / WDX）内のチャネル電力。ウィンドウはグラフに黄色で表示されます。'], PWTOTAL: ['Total power of the screen.', '画面全体の総電力。'],
+  PWAVG: ['Average power.', '平均電力。'], PWM: ['Power measurement off.', '電力測定を OFF にします。'],
+  ACP: ['ACP measurement on/off (results in the RESULT box).', 'ACP 測定の ON/OFF（結果は測定結果欄）。'],
+  ACPST: ['ACP parameter setup.', 'ACP のパラメータ設定。'], ACPSCR: ['ACP screen layout.', 'ACP の画面表示。'], ADG: ['ACP graph on/off.', 'ACP グラフの ON/OFF。'],
+  'ACPSCR FULL': ['ACP full screen: the whole span; the browser shows the trace with the BS windows.', 'ACP 全画面表示。全スパンを表示し、ブラウザでは BS ウィンドウ付きで表示されます。'],
+  'ACPSCR SEPA': ['ACP separate screen (on the R3267: full span + carrier). Over GPIB only the carrier window (trace A, span = BS) can be read, so the browser shows just that part.',
+                  'ACP 分割表示（R3267 本体: 全スパン + キャリア）。GPIB で取得できるのはキャリアウィンドウ（トレース A、スパン = BS）だけなので、ブラウザにはその部分のみ表示されます。'],
+  'ACPSCR CARR': ['ACP full screen with carrier display.', 'ACP 全画面（キャリア表示）。'],
+  NQST: ['√Nyquist filter on/off.', '√ナイキストフィルタの ON/OFF。'],
+  ACPBSW: ['BS window on/off. While ACP and BS window are on, the graph shows the carrier and adjacent-channel windows (cyan; width = carrier BS).',
+           'BS ウィンドウの ON/OFF。ACP と BS ウィンドウが ON のとき、グラフにキャリアと隣接チャネルのウィンドウを水色で表示します（幅はキャリアの BS）。'],
+  OBW: ['OBW measurement on/off (OBW and Fc in the RESULT box).', 'OBW 測定の ON/OFF（OBW と中心周波数を測定結果欄に表示）。'],
+  OBWST: ['OBW parameter setup.', 'OBW のパラメータ設定。'], HARM: ['Harmonics measurement on/off.', '高調波測定の ON/OFF。'],
+  HRMFND: ['Use the fundamental frequency setting.', '基本波周波数の設定を使用します。'], SPURI: ['Spurious measurement on/off.', 'スプリアス測定の ON/OFF。'],
+  EYEOPN: ['Eye opening measurement on/off.', 'アイ開口率測定の ON/OFF。'], EYEAMPM: ['Position the Y cursor automatically.', 'Y カーソルを自動で配置します。'],
+  EYECOR: ['Internal jitter compensation.', '内部ジッタ補正。'], CNIS: ['C/N (phase noise) measurement on/off.', 'C/N（位相雑音）測定の ON/OFF。'],
+  CNSIG: ['C/N signal track.', 'C/N のシグナルトラック。'], PJIT: ['Phase jitter measurement on/off.', '位相ジッタ測定の ON/OFF。'],
+  PJSIG: ['Phase jitter signal track.', '位相ジッタのシグナルトラック。'], IMM: ['IM measurement on/off.', 'IM 測定の ON/OFF。'],
+  IMPFC: ['IM pass/fail judgement.', 'IM の Pass/Fail 判定。'], IMHS: ['IM high-sensitivity mode.', 'IM 高感度モード。'],
+  CLALL: ['Run all calibrations.', 'すべての校正を実行します。'], CLGAIN: ['Total gain calibration.', 'トータルゲイン校正。'],
+  CLATT: ['Input attenuator calibration.', '入力アッテネータ校正。'], CLSTEP: ['IF step amplifier calibration.', 'IF ステップアンプ校正。'],
+  CLRBW: ['RBW switching calibration.', 'RBW 切り替え校正。'], CLLOG: ['Log linearity calibration.', 'ログリニアリティ校正。'],
+  CLMAG: ['Amplitude magnitude calibration.', '振幅校正。'], CLPBW: ['PBW calibration.', 'PBW 校正。'],
+  FC: ['Frequency correction on/off.', '周波数補正の ON/OFF。'], CC: ['Calibration correction on/off.', '校正補正の ON/OFF。'],
+  TPS: ['501 trace points.', 'トレースポイント数を 501 にします。'], TPL: ['1001 trace points.', 'トレースポイント数を 1001 にします。'],
+  ANNOT: ['Screen annotation on/off.', '画面アノテーションの ON/OFF。'],
+  SV: ['Save the current settings to register REG_nn.', '現在の設定をレジスタ REG_nn に保存します。'],
+  RC: ['Recall the settings from register REG_nn.', 'レジスタ REG_nn から設定を呼び出します。'],
+  DEL: ['Delete register REG_nn.', 'レジスタ REG_nn を削除します。'],
+  IP: ['Instrument preset: all settings return to the factory defaults.', 'プリセット: すべての設定が初期状態に戻ります。'],
+};
+function softHelp(s) {
+  if (s.p) return P[s.p].name + ': ' + L(PARAM_HELP[s.p]) + '\n' +
+    tr('Press to make it the active function; set it with numeric + unit keys, ↑↓ or the jog dial.',
+       'このキーを押すと入力対象になります。テンキー＋単位キー、↑↓、ジョグダイアルで設定。') + '\n(GPIB: ' + s.p + ')';
+  const code = typeof s.code === 'function' ? (meta ? s.code(meta) : s.lbl) : s.code;
+  const base = (code || '').split(' ')[0];
+  const h = L(SOFT_HELP[code] || SOFT_HELP[base]);
+  return s.lbl + (h ? ': ' + h : '') + '\n(GPIB: ' + code + ')';
+}
+const KEY_HELP = {
+  BS: ['Delete one character of the typed value (Backspace).', '入力中の数値を 1 文字消します（Backspace）。'],
+  CLR: ['Clear the typed value (Esc).', '入力中の数値をクリアします（Esc）。'],
+  '↑': ['Step the active function up (coarse: 1-2-5 sequence, CF step, dB/div, ...).', 'アクティブ項目を 1 ステップ上げます（粗調整: 1-2-5 系列、CF ステップ、dB/div など）。'],
+  '↓': ['Step the active function down.', 'アクティブ項目を 1 ステップ下げます。'],
+  '.': ['Decimal point', '小数点'], '-': ['Change the sign.', '符号を反転します。'],
+};
+
+let curMenu = 'FREQ', active = 'CF', entry = '';
+
+function buildPanel() {
+  // FREQ / SPAN / LEVEL / COUPLE are the large main keys, the others go below them.
+  const MAJOR = ['FREQ', 'SPAN', 'LEVEL', 'COUPLE'];
+  const big = $('bigkeys'), fk = $('fkeys'); big.innerHTML = ''; fk.innerHTML = '';
+  for (const name of Object.keys(MENUS)) {
+    const b = document.createElement('button');
+    b.textContent = name; b.className = name === curMenu ? 'sel' : '';
+    b.dataset.help = L(FKEY_HELP[name]) || name;
+    b.onclick = () => selectMenu(name);
+    (MAJOR.includes(name) ? big : fk).appendChild(b);
+  }
+  const pad = $('pad'); pad.innerHTML = '';
+  for (const k of ['7', '8', '9', 'BS', '4', '5', '6', '↑', '1', '2', '3', '↓', '0', '.', '-', 'CLR']) {
+    const b = document.createElement('button');
+    b.textContent = k === 'BS' ? '⌫' : k;
+    if (k === '↑' || k === '↓') b.className = 'step';
+    b.dataset.help = L(KEY_HELP[k]) || tr('Enter digit ' + k + '.', '数字 ' + k + ' を入力します。');
+    b.onclick = () => keyPress(k);
+    pad.appendChild(b);
+  }
+  for (let i = 0; i < 4; i++) {
+    const b = document.createElement('button');
+    b.className = 'unit'; b.id = 'unit' + i;
+    b.onclick = () => unitPress(i);
+    pad.appendChild(b);
+  }
+  renderSoft(); renderEntry();
+}
+
+function selectMenu(name) {
+  curMenu = name;
+  const firstParam = MENUS[name].find(s => s.p);
+  active = firstParam ? firstParam.p : null;
+  entry = '';
+  document.querySelectorAll('#bigkeys button, #fkeys button').forEach(b => b.className = b.textContent === name ? 'sel' : '');
+  // keep the graph overlays (peak list, ACP windows); drop the menu's results
+  results = Object.fromEntries(Object.entries(results).filter(([k]) => k === 'PKLST?' || k === 'ACP?'));
+  renderSoft(); renderEntry();
+  requestState(); requestResults();
+}
+
+// Soft keys are built once per menu and then only updated in place: rebuilding
+// the buttons every few seconds (state / meta refresh) would replace the element
+// under the mouse and close its hover help.
+let softBuiltFor = null;
+function softValue(s) {
+  if (s.p) return P[s.p].sq === null ? '' : FMT[kindOf(s.p)](pget(s.p, meta || {}));
+  return meta && s.val ? (s.val(meta) || '') : '';
+}
+function renderSoft() {
+  $('soft-title').textContent = tr('SOFT KEYS — ', 'ソフトキー — ') + curMenu;
+  const sk = $('soft');
+  if (softBuiltFor !== curMenu) {
+    softBuiltFor = curMenu;
+    sk.innerHTML = '';
+    for (const s of MENUS[curMenu]) {
+      if (s.hdr) {
+        const h = document.createElement('div');
+        h.className = 'shdr'; h.textContent = L(s.hdr);
+        sk.appendChild(h); continue;
+      }
+      const b = document.createElement('button');
+      b._soft = s;
+      b.innerHTML = '<span class="l"></span><span class="v"></span>';
+      b.onclick = () => {
+        if (s.p) { active = s.p; entry = ''; renderSoft(); renderEntry(); return; }
+        const code = typeof s.code === 'function' ? s.code(meta || {}) : s.code;
+        if (!code) return;
+        if (/^TRGSRC (VIDEO|EXT)/.test(code) && !confirm(tr(
+            'Video / Ext trigger: without a trigger signal the R3267 waits and the trace freezes.\n' +
+            'The capture then only reads the current trace (no TS). Switch back with "Trig Free Run".\n\nContinue?',
+            'Video / Ext トリガ: トリガ信号がないと R3267 は掃引を待ち続け、波形が止まります。\n' +
+            'その間の取り込みは現在のトレースの読み出しのみ（TS なし）になります。「Trig Free Run」で戻せます。\n\n続けますか？'))) return;
+        if (s.cf && !confirm(L(s.cf) + '\n(GPIB: ' + code + ')')) return;
+        sendKey(code);
+      };
+      sk.appendChild(b);
+    }
+  }
+  // update labels, values, states and help text in place
+  for (const b of sk.querySelectorAll('button')) {
+    const s = b._soft;
+    const lbl = s.p ? P[s.p].name : s.lbl, val = softValue(s), help = softHelp(s);
+    const l = b.firstChild, v = b.lastChild;
+    if (l.textContent !== lbl) l.textContent = lbl;
+    if (v.textContent !== val) v.textContent = val;
+    v.style.display = val ? '' : 'none';
+    if (b.dataset.help !== help) b.dataset.help = help;
+    b.classList.toggle('act', !!(s.p && s.p === active));
+    b.classList.toggle('on', !!(s.on && s.on(meta || {})));
+  }
+  renderResults();
+}
+
+// ── panel state / measurement result queries ───────────────────────────────
+let stTimer = null, resTimer = null, stDue = null;
+function menuQueries(name) {
+  const q = MENU_Q[name];
+  return !q ? [] : Array.isArray(q) ? q : [q];
+}
+function requestState() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  for (const q of menuQueries(curMenu)) send({cmd: 'query', id: 'st', addr: +$('addr').value, q});
+}
+// re-read the menu state shortly after a key (coalesces fast clicks / jog)
+function stateSoon() { clearTimeout(stDue); stDue = setTimeout(requestState, 600); }
+function requestResults() {
+  if (!ws || ws.readyState !== WebSocket.OPEN || document.hidden) return;
+  const qs = (MENU_RES[curMenu] || []).filter(r => !r.on || r.on()).map(r => r.q);
+  if (qs.length) send({cmd: 'query', id: 'res', addr: +$('addr').value, q: qs.join(' ')});
+}
+// Graph overlays (BS windows of ACP, channel-power / display window) need a few
+// values whatever menu is open: read them every 3 s.
+let ovTimer = null;
+function requestOverlay() {
+  if (!ws || ws.readyState !== WebSocket.OPEN || document.hidden) return;
+  let q = 'ACPON? ACPBSW? ACPSCR? CARRBS? PWCHON? WLX? WDX?';
+  if (st['ACPON?'] === '1' && st['ACPBSW?'] === '1') q += ' ACP?';
+  if (plsMode) q += ' PKLST?';
+  q += ' XYCSR? MKSX? MKSY? MKSYDL?';
+  if (st['MKSX?'] === '1' || st['MKSX?'] === '2') q += ' MKSPOS? MKSWID?';
+  if (st['XYCSR?'] === '1') q += ' CSRX? CSRY? CSRDX? CSRDY?';
+  send({cmd: 'query', id: 'ov', addr: +$('addr').value, q});
+}
+function startPolling() {
+  clearInterval(stTimer); clearInterval(resTimer); clearInterval(ovTimer);
+  stTimer = setInterval(() => { if (!document.hidden) requestState(); }, 4000);
+  resTimer = setInterval(requestResults, 1500);
+  ovTimer = setInterval(requestOverlay, 3000);
+  requestOverlay();
+}
+let results = {};
+function fmtField(kind, x) {
+  if (kind === 'raw') return x;
+  const v = parseFloat(x);
+  if (!isFinite(v) || Math.abs(v) >= 9.99e8) return '--';
+  switch (kind) {
+    case 'freq': return zeroSpan() ? fmtTime(v) : fmtHz(v);   // zero span: results are times
+    case 'level': return trimNum(v, 2) + ' ' + unitName();
+    case 'db': return trimNum(v, 2) + ' dB';
+    case 'pct': return trimNum(v, 2) + ' %';
+    case 'pf': return v === 0 ? 'PASS' : 'FAIL';
+    default: return x;
+  }
+}
+// Multi-line results as a table: one unit per column (in the header), fixed
+// decimals, right-aligned, so the digits line up. Unused entries
+// (-999999999) are skipped; '#' matches the numbered markers on the graph.
+function colUnit(kind, vals) {
+  const a = Math.max(0, ...vals.filter(isFinite).map(Math.abs));
+  if (kind === 'freq' && zeroSpan()) {
+    const [d, u] = a >= 1 ? [1, 's'] : a >= 1e-3 ? [1e-3, 'ms'] : [1e-6, 'µs'];
+    return {u, f: v => (v / d).toFixed(3)};
+  }
+  if (kind === 'freq') {
+    const [d, u, n] = a >= 1e9 ? [1e9, 'GHz', 6] : a >= 1e6 ? [1e6, 'MHz', 4] : a >= 1e3 ? [1e3, 'kHz', 3] : [1, 'Hz', 1];
+    return {u, f: v => (v / d).toFixed(n)};
+  }
+  if (kind === 'level') return lin(meta) ? {u: unitName(), f: v => fmtEng(v, '').trim()} : {u: unitName(), f: v => v.toFixed(2)};
+  if (kind === 'db') return {u: 'dB', f: v => v.toFixed(2)};
+  if (kind === 'pct') return {u: '%', f: v => v.toFixed(2)};
+  return {u: '', f: null};
+}
+function listTable(r, val) {
+  const lines = val.split('\n'), n = parseInt(lines[0], 10) || 0;
+  const rows = lines.slice(1, 1 + n).map(l => l.split(',').map(x => x.trim()))
+    .filter(c => { const v = parseFloat(c[0]); return c[0] !== '' && !(isFinite(v) && Math.abs(v) >= 9.99e8); });
+  if (!rows.length) return '--';
+  const kinds = r.f.slice(1), nc = Math.max(kinds.length, ...rows.map(c => c.length));
+  const units = [];
+  for (let j = 0; j < nc; j++) units.push(colUnit(kinds[j] || 'raw', rows.map(c => parseFloat(c[j]))));
+  const head = '<tr><th>#</th>' + units.map((u, j) => {
+    const name = r.cols && r.cols[j] ? L(r.cols[j]) : String(j + 1);
+    return '<th>' + name + (u.u ? ' [' + u.u + ']' : '') + '</th>';
+  }).join('') + '</tr>';
+  const body = rows.map((c, i) => '<tr><td>' + (i + 1) + '</td>' + units.map((u, j) => {
+    const x = c[j], v = parseFloat(x);
+    return '<td>' + (x == null ? '' : !u.f ? x : !isFinite(v) || Math.abs(v) >= 9.99e8 ? '--' : u.f(v)) + '</td>';
+  }).join('') + '</tr>').join('');
+  return '<table class="rtab">' + head + body + '</table>';
+}
+function fmtResult(r, val) {
+  if (val == null) return '…';
+  if (val.indexOf('ERR') === 0) return '<span style="color:#fca5a5">' + val + '</span>';
+  if (r.f[0] === 'list') return listTable(r, val);
+  return val.split(',').map((x, i) => fmtField(r.f[i] || 'raw', x.trim())).join(' / ');
+}
+function renderResults() {
+  const box = $('result'), defs = MENU_RES[curMenu] || [];
+  if (!defs.length) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  box.innerHTML = '<div class="sec" style="margin:0 0 4px">' + tr('RESULT', '測定結果') + '</div>' +
+    defs.map(r => {
+      const on = !r.on || r.on();
+      const v = on ? fmtResult(r, results[r.q]) : tr('(off)', '（OFF）');
+      return v.indexOf('<table') === 0 ? '<div class="rrow tab"><span>' + L(r.lbl) + '</span>' + v + '</div>'
+                                       : '<div class="rrow"><span>' + L(r.lbl) + '</span><b>' + v + '</b></div>';
+    }).join('');
+}
+// Zero span = time-domain display: the X axis is 0 … sweep time.
+// The marker position (MK) is then a time as well.
+function kindOf(id) { return (id === 'MK' || id === 'MKSPOS' || id === 'MKSWID') && zeroSpan() ? 'time' : P[id].kind; }
+function fmtMk(v) { return zeroSpan() ? fmtTime(v) : fmtHz(v); }
+function zeroSpan() { return !!meta && meta.span === 0; }
+function fmtX(i, n) {
+  if (zeroSpan()) return fmtTime((meta.swt || 0) * i / (n - 1));
+  return fmtHz(freqAt(i, n));
+}
+function unitName() {
+  return ['dBm', 'dBmV', 'dBµV', 'dBµV', 'dBpW', 'W', 'V'][meta && meta.aunits != null ? meta.aunits : 0] || 'dBm';
+}
+
+function renderEntry() {
+  if (!active) { $('af-name').textContent = curMenu; $('af-val').textContent = '—'; $('af-inp').textContent = ''; setUnits(null); return; }
+  const p = P[active];
+  $('af-name').textContent = p.name;
+  $('af-val').textContent = (p.sq || (meta && p.key)) ? FMT[kindOf(active)](pget(active, meta || {})) : '--';
+  $('af-inp').textContent = entry;
+  setUnits(kindOf(active));
+}
+
+function setUnits(kind) {
+  const u = kind ? UNITS[kind] : [];
+  for (let i = 0; i < 4; i++) {
+    const b = $('unit' + i);
+    if (u[i]) {
+      b.textContent = u[i][0]; b.disabled = false;
+      b.dataset.help = u[i][3]
+        ? tr('Enter the typed number as a ' + (u[i][3] > 0 ? 'positive' : 'negative') + ' dBm value (R3267 ' + u[i][0] + ' key).',
+             '入力した数値を ' + (u[i][3] > 0 ? '正' : '負') + ' の dBm として確定・送信します（R3267 の ' + u[i][0] + ' キー）。')
+        : u[i][1] ? tr('Enter the typed number in ' + u[i][0] + ' (GPIB unit: ' + u[i][1] + ').', '入力した数値を ' + u[i][0] + ' 単位で確定・送信します（GPIB 単位: ' + u[i][1] + '）。')
+        : tr('Enter the typed number.', '入力した数値を確定・送信します。');
+    } else { b.textContent = ''; b.disabled = true; delete b.dataset.help; }
+  }
+}
+
+function keyPress(k) {
+  if (k === '↑' || k === '↓') { stepActive(k === '↑' ? 1 : -1, false, 1); return; }
+  if (!active) return;
+  if (k === 'BS') entry = entry.slice(0, -1);
+  else if (k === 'CLR') entry = '';
+  else if (k === '-') entry = entry.startsWith('-') ? entry.slice(1) : '-' + entry;
+  else if (k === '.') { if (!entry.includes('.')) entry += entry === '' || entry === '-' ? '0.' : '.'; }
+  else if (entry.replace(/[-.]/g, '').length < 12) entry += k;
+  renderEntry();
+}
+
+function sendValue(v, unit) {
+  const p = P[active], kind = kindOf(active);
+  if (p.lim) v = Math.max(p.lim[0], Math.min(p.lim[1], v));
+  if (kind === 'count') v = Math.round(v);
+  if (p.local) { st[p.sq] = String(v); renderSoft(); renderEntry(); return; }   // e.g. register number
+  if (p.sq) st[p.sq] = String(kind === 'freq' || kind === 'level' || kind === 'db' || kind === 'time'
+                               ? v * ((UNITS[kind].find(u => u[1] === unit) || [0, 0, 1])[2]) : v);
+  sendKey(active + ' ' + (kind === 'count' ? String(v) : arg(v, unit)));
+}
+function unitPress(i) {
+  if (!active || !entry || entry === '-' || isNaN(+entry)) return;
+  const u = UNITS[kindOf(active)][i];
+  if (!u) return;
+  sendValue(u[3] ? u[3] * Math.abs(+entry) : +entry, u[1]);
+  entry = ''; renderEntry();
+}
+function enterDefault() {
+  if (!active || !entry || isNaN(+entry)) return;
+  sendValue(+entry, DEF_UNIT[kindOf(active)]);
+  entry = ''; renderEntry();
+}
+
+// Step the active function `count` times (jog dial ticks are batched).
+function stepActive(dir, fine, count) {
+  if (!active) return;
+  const p = P[active];
+  if (p.sq) {                                   // value held in st (panel query)
+    let v = p.local ? (stNum(p.sq) ?? 0) : stNum(p.sq);
+    if (v == null) return;
+    for (let i = 0; i < count; i++) {
+      v = p.stepf ? p.stepf(v, dir, fine) : stepGeneric(p.kind, v, dir, fine);
+      if (v == null || !isFinite(v)) return;
+      if (p.lim) v = Math.max(p.lim[0], Math.min(p.lim[1], v));
+    }
+    if (p.kind === 'freq') v = Math.max(0, Math.round(v));
+    sendValue(v, BASE_UNIT[kindOf(active)]);
+    renderEntry(); renderSoft();
+    return;
+  }
+  if (!meta || !p.key) return;
+  const mm = Object.assign({}, meta);
+  if (active === 'MK' && !(mm.mkr && isFinite(mm.mkf))) { mm.mkr = 1; mm.mkf = mm.span ? mm.cf : 0; }
+  let v = null;
+  for (let i = 0; i < count; i++) {
+    v = p.step(mm, dir, fine);
+    if (v == null || !isFinite(v)) return;
+    if (p.lim) v = Math.max(p.lim[0], Math.min(p.lim[1], v));
+    mm[p.key] = v;
+  }
+  if (kindOf(active) === 'freq') v = Math.max(0, Math.round(v));
+  sendValue(v, BASE_UNIT[kindOf(active)]);
+  meta[p.key] = v;                        // optimistic: keep jogging from the new value
+  if (active === 'MK') meta.mkr = 1;
+  renderEntry(); renderSoft(); draw();
+}
+
+// ── jog dial (mouse wheel / drag) ───────────────────────────────────────────
+const knob = $('knob'), kctx = knob.getContext('2d');
+let knobAngle = 0, jogAcc = 0, jogCoarse = false, jogTimer = null;
+function drawKnob() {
+  const W = knob.width, c = W / 2, r = W / 2 - 6;
+  kctx.clearRect(0, 0, W, W);
+  const g = kctx.createRadialGradient(c - r / 3, c - r / 3, r / 6, c, c, r);
+  g.addColorStop(0, '#475569'); g.addColorStop(1, '#0f172a');
+  kctx.fillStyle = g; kctx.beginPath(); kctx.arc(c, c, r, 0, 2 * Math.PI); kctx.fill();
+  kctx.strokeStyle = '#2d4a6a'; kctx.lineWidth = 4; kctx.stroke();
+  kctx.strokeStyle = '#334155'; kctx.lineWidth = 2;
+  for (let i = 0; i < 24; i++) {          // grip ridges
+    const a = knobAngle + i * Math.PI / 12;
+    kctx.beginPath(); kctx.moveTo(c + Math.cos(a) * r * .78, c + Math.sin(a) * r * .78);
+    kctx.lineTo(c + Math.cos(a) * r * .95, c + Math.sin(a) * r * .95); kctx.stroke();
+  }
+  const a = knobAngle - Math.PI / 2;      // finger dimple
+  kctx.fillStyle = '#60a5fa'; kctx.beginPath(); kctx.arc(c + Math.cos(a) * r * .55, c + Math.sin(a) * r * .55, r * .12, 0, 2 * Math.PI); kctx.fill();
+}
+function jog(ticks, coarse) {
+  if (!ticks) return;
+  knobAngle += ticks * Math.PI / 12; drawKnob();
+  jogAcc += ticks; jogCoarse = coarse;
+  if (jogTimer) return;
+  jogTimer = setTimeout(() => {           // batch ticks: at most ~10 commands/s
+    const n = jogAcc; jogAcc = 0; jogTimer = null;
+    if (n) stepActive(Math.sign(n), !jogCoarse, Math.min(Math.abs(n), 50));
+  }, 100);
+}
+function onWheel(e) { e.preventDefault(); jog(e.deltaY < 0 ? 1 : -1, e.shiftKey); }
+knob.addEventListener('wheel', onWheel, {passive: false});
+$('entry').addEventListener('wheel', onWheel, {passive: false});
+cv.addEventListener('wheel', onWheel, {passive: false});
+// drag: rotate around the centre, 15° per tick
+let dragAng = null;
+function ptrAngle(e) { const r = knob.getBoundingClientRect(); return Math.atan2(e.clientY - r.top - r.height / 2, e.clientX - r.left - r.width / 2); }
+knob.addEventListener('pointerdown', e => { knob.setPointerCapture(e.pointerId); dragAng = ptrAngle(e); });
+knob.addEventListener('pointermove', e => {
+  if (dragAng === null) return;
+  let a = ptrAngle(e), d = a - dragAng;
+  if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI;
+  const t = Math.trunc(d / (Math.PI / 12));
+  if (t) { dragAng += t * Math.PI / 12; jog(t, e.shiftKey); }
+});
+knob.addEventListener('pointerup', () => dragAng = null);
+knob.addEventListener('pointercancel', () => dragAng = null);
+
+// ── REPEAT / SINGLE hard keys ───────────────────────────────────────────────
+let singleMode = false;
+function setSweepUI() {
+  $('hk-repeat').classList.toggle('lit', running && !singleMode);
+  $('hk-single').classList.toggle('lit', running && singleMode);
+}
+$('hk-repeat').onclick = () => {
+  singleMode = false; setSweepUI();
+  if (running) sendKey('CONTS'); else { sendKey('CONTS'); send({cmd: 'start', addr: +$('addr').value}); }
+};
+$('hk-single').onclick = () => {
+  singleMode = true; setSweepUI();
+  if (!running) send({cmd: 'start', addr: +$('addr').value});
+  setTimeout(() => sendKey('SNGLS'), running ? 0 : 400);
+};
+
+// ── WebSocket ───────────────────────────────────────────────────────────────
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(proto + '//' + location.host + '/ws/spectrum');
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => { $('conn').textContent = tr('WS connected', 'WS 接続中'); $('conn').className = 'status ok'; send({cmd: 'hello'}); requestState(); startPolling(); };
+  ws.onclose = () => {
+    $('conn').textContent = sessionDead ? tr('Session expired', 'セッション無効') : tr('WS disconnected', 'WS 未接続'); $('conn').className = 'status off'; setRunning(false);
+    if (!sessionDead) setTimeout(connect, 2000);   // stop reconnecting once the session is invalid
+  };
+  ws.onmessage = ev => {
+    if (typeof ev.data === 'string') { onText(JSON.parse(ev.data)); return; }
+    onFrame(new DataView(ev.data));
+  };
+}
+function send(o) { if (ws && ws.readyState === WebSocket.OPEN) { o.token = TOKEN; ws.send(JSON.stringify(o)); } }
+let ovSoon = 0;
+// Peak list (PLS FREQ / LEVEL): the R3267 has no query for this state, and
+// PKLST? keeps returning the last list after PLS OFF, so the page tracks it.
+let plsMode = null;
+try { plsMode = sessionStorage.getItem('pls') || null; } catch (e) {}
+function trackPls(text) {
+  const t = text.trim().toUpperCase();
+  const was = plsMode;
+  if (t === 'PLS FREQ') plsMode = 'FREQ';
+  else if (t === 'PLS LEVEL') plsMode = 'LEVEL';
+  else if (t === 'PLS OFF' || t === 'IP' || t === 'MKOFF' || t.startsWith('RC ')) plsMode = null;
+  else return;
+  try { if (plsMode) sessionStorage.setItem('pls', plsMode); else sessionStorage.removeItem('pls'); } catch (e) {}
+  if (plsMode) { delete results['PKLST?']; setTimeout(requestOverlay, 1200); }   // list is re-made by the instrument
+  if (was !== plsMode) draw();
+}
+function sendKey(text) {
+  if (!text) return; trackPls(text);
+  if (/^(XYCSR|CSRX|CSRY|SETANC|RLSANC|MKSX|MKSPOS|MKSWID|MKSY|MKSYDL)\b/.test(text.trim())) { clearTimeout(ovSoon); ovSoon = setTimeout(requestOverlay, 700); } $('msg').textContent = ''; send({cmd: 'key', addr: +$('addr').value, text}); stateSoon(); }
+
+function setRunning(r) {
+  running = r;
+  $('run').textContent = r ? tr('Running', '取り込み中') : tr('Stopped', '停止中');
+  $('run').className = 'status ' + (r ? 'ok' : 'off');
+  setSweepUI();
+}
+
+function onText(m) {
+  if (m.type === 'auth') { sessionExpired(); if (ws) ws.close(); return; }
+  if (m.type === 'qres') {
+    for (const k in m.vals) {
+      const v = String(m.vals[k]).trim();
+      if (m.id === 'res' || k === 'ACP?' || k === 'PKLST?') results[k] = v;   // results (multi-line) vs. states
+      else if (v.indexOf('ERR') !== 0) st[k] = v;
+    }
+    if (m.id === 'res') renderResults();
+    else if (m.id === 'ov') draw();
+    else { renderSoft(); renderEntry(); draw(); }
+    return;
+  }
+  if (m.type === 'meta') {
+    const changed = !meta || meta.fa !== m.fa || meta.fb !== m.fb || meta.npts !== m.npts || meta.rl !== m.rl || meta.ddiv !== m.ddiv || (m.aunits != null && meta.aunits !== m.aunits);
+    // Periodic metas carry only the main values (full=false): merge.
+    meta = m.full || !meta ? Object.assign(meta || {}, m) : Object.assign(meta, m);
+    m = meta;
+    if (changed) { hold = null; wfClear(); recAxisChanged(); }   // axes changed: old rows would not line up
+    if (lo(m.tb) === 2) traceB = null;
+    const sp = !!m.split;
+    if (!sp) { meta2 = null; trace2 = null; }
+    if (sp !== splitOn) { splitOn = sp; resize(); }
+    singleMode = !!m.single; setSweepUI();
+    $('i-cf').textContent = fmtHz(m.cf); $('i-span').textContent = fmtHz(m.span);
+    $('i-rbw').textContent = fmtHz(m.rbw) + (m.rbw_auto ? ' (A)' : '');
+    $('i-vbw').textContent = fmtHz(m.vbw) + (m.vbw_auto ? ' (A)' : '');
+    $('i-swt').textContent = fmtTime(m.swt) + (m.swt_auto ? ' (A)' : '');
+    $('i-att').textContent = FMT.db(m.att) + (m.att_auto ? ' (A)' : '');
+    $('i-rl').textContent = FMT.level(m.rl); $('i-dd').textContent = lin(m) ? tr('linear', 'リニア') : m.ddiv + ' dB/div';
+    $('i-tr').textContent = 'A:' + TRMODE[lo(m.ta)] + TRADD[hi(m.ta)] + '  B:' + TRMODE[lo(m.tb)] + TRADD[hi(m.tb)] +
+      '  Det:' + DETN[m.det] + (m.single ? '  SINGLE' : '');
+    $('msg').textContent = '';
+    renderSoft(); renderEntry(); updateMarkerInfo(); draw();
+  } else if (m.type === 'meta2') {
+    if (!meta2 || meta2.fa !== m.fa || meta2.fb !== m.fb || meta2.span !== m.span || meta2.rl !== m.rl || meta2.ddiv !== m.ddiv) trace2 = null;
+    meta2 = m;
+    if (!splitOn) { splitOn = true; resize(); }
+    drawLower();
+  } else if (m.type === 'state') {
+    setRunning(m.running);
+  } else if (m.type === 'error') {
+    $('msg').textContent = m.msg;
+  }
+}
+
+function decode(dv, m = meta) {           // 1 tag byte + N x u16 BE
+  const n = (dv.byteLength - 1) / 2, t = new Float32Array(n);
+  if (lin(m)) {                           // linear (W / V): 1792 = 0, 14592 = reference level
+    for (let i = 0; i < n; i++) t[i] = m.rl * (dv.getUint16(1 + i * 2, false) - 1792) / (TOP - 1792);
+  } else {
+    for (let i = 0; i < n; i++) t[i] = m.rl + (dv.getUint16(1 + i * 2, false) - TOP) / PER_DIV * m.ddiv;
+  }
+  return t;
+}
+function onFrame(dv) {
+  if (!meta || (dv.byteLength - 1) / 2 !== meta.npts) return;
+  const tag = String.fromCharCode(dv.getUint8(0));
+  if (tag === 'B') { traceB = decode(dv); draw(); return; }
+  if (tag === 'C') { if (meta2) { trace2 = decode(dv, meta2); drawLower(); } return; }   // lower screen (split)
+  const t = decode(dv), n = t.length;
+  trace = t;
+  recPush(t);
+  wfPush(t);
+  if ($('maxhold').checked) {
+    if (!hold || hold.length !== n) hold = Float32Array.from(t);
+    else for (let i = 0; i < n; i++) if (t[i] > hold[i]) hold[i] = t[i];
+  }
+  const now = performance.now();
+  frames.push(now); while (frames.length && now - frames[0] > 3000) frames.shift();
+  if (frames.length > 1) $('i-fps').textContent = ((frames.length - 1) / ((now - frames[0]) / 1000)).toFixed(1) + ' fps';
+  let pk = 0; for (let i = 1; i < n; i++) if (t[i] > t[pk]) pk = i;
+  $('i-pk').textContent = FMT.level(t[pk]) + ' @ ' + fmtX(pk, n);
+  updateMarkerInfo();
+  draw();
+}
+
+function freqAt(i, n) { return meta.fa + (meta.fb - meta.fa) * i / (n - 1); }
+function markerIndex() {
+  if (!meta || !meta.mkr || !isFinite(meta.mkf) || !trace) return -1;
+  const n = trace.length;
+  const i = zeroSpan() ? (meta.swt > 0 ? Math.round(meta.mkf / meta.swt * (n - 1)) : -1)
+                       : (meta.fb === meta.fa ? -1 : Math.round((meta.mkf - meta.fa) / (meta.fb - meta.fa) * (n - 1)));
+  return i >= 0 && i < n ? i : -1;
+}
+function updateMarkerInfo() {
+  const i = markerIndex();
+  $('i-mk').textContent = i < 0 ? (meta && meta.mkr ? fmtMk(meta.mkf) : 'OFF')
+    : fmtMk(meta.mkf) + ' / ' + FMT.level(trace[i]);
+}
+
+// ── drawing ─────────────────────────────────────────────────────────────────
+const G = {L: 64, R: 16, T: 14, B: 30};
+function resize() {
+  // waterfall on: spectrum 58 % / waterfall 42 % of the graph area;
+  // split screen: upper / lower 50 % each (36 / 28 / 36 % with the waterfall)
+  const [hU, hL] = splitOn ? (wfOn ? [36, 28] : [50, 50]) : [wfOn ? 58 : 100, 0];
+  cv.style.height = hU + '%';
+  cv2.style.display = splitOn ? 'block' : 'none';
+  cv2.style.top = hU + '%'; cv2.style.height = hL + '%';
+  wf.style.display = wfOn ? 'block' : 'none';
+  wf.style.height = (100 - hU - hL) + '%';
+  const d = window.devicePixelRatio || 1;
+  for (const [c, x] of [[cv, ctx], [cv2, ctx2], [wf, wctx]]) {
+    const r = c.getBoundingClientRect();
+    c.width = Math.max(1, Math.round(r.width * d)); c.height = Math.max(1, Math.round(r.height * d));
+    x.setTransform(d, 0, 0, d, 0, 0);
+  }
+  draw(); drawLower(); drawWF();
+}
+
+// ── lower screen of the WINDOW split display (Zoom / F/T / T/T) ─────────────
+const cv2 = $('cv2'), ctx2 = cv2.getContext('2d');
+let splitOn = false;
+const SPLIT_NAME = {1: 'ZOOM', 2: 'F/T', 3: 'T/T'};
+// "UPPER / LOWER" tag in a pane corner; the screen selected for settings is highlighted
+function paneTag(c, W, lower) {
+  const sel = meta && (meta.scrsel === 1) === lower;
+  const t = (SPLIT_NAME[meta && meta.mltscr] || 'SPLIT') + ' ' + (lower ? tr('LOWER', '下画面') : tr('UPPER', '上画面')) + (sel ? ' ◀ ' + tr('active', '操作対象') : '');
+  c.font = '11px sans-serif'; c.textAlign = 'right';
+  const tw = c.measureText(t).width;
+  c.fillStyle = sel ? 'rgba(250,204,21,.85)' : 'rgba(51,65,85,.85)'; c.fillRect(W - G.R - tw - 12, G.T + 2, tw + 10, 16);
+  c.fillStyle = sel ? '#1e293b' : '#e2e8f0'; c.fillText(t, W - G.R - 7, G.T + 14);
+}
+function fmtLv2(v) {
+  if (v == null || !isFinite(v)) return '--';
+  const u = ['dBm', 'dBmV', 'dBµV', 'dBµV', 'dBpW', 'W', 'V'][meta2.aunits] || 'dBm';
+  return lin(meta2) ? fmtEng(v, u) : trimNum(v, 2) + ' ' + u;
+}
+function fmtX2(i, n) {
+  return meta2.span === 0 ? fmtTime((meta2.swt || 0) * i / (n - 1)) : fmtHz(meta2.fa + (meta2.fb - meta2.fa) * i / (n - 1));
+}
+function drawLower() {
+  if (!splitOn) return;
+  const c = ctx2, W = cv2.clientWidth, H = cv2.clientHeight;
+  const {L, R, T, B} = G, w = W - L - R, h = H - T - B;
+  c.clearRect(0, 0, W, H);
+  c.fillStyle = '#0b1220'; c.fillRect(L, T, w, h);
+  c.strokeStyle = '#1f3352'; c.lineWidth = 1; c.beginPath();
+  for (let i = 0; i <= 10; i++) {
+    const x = L + w * i / 10 + .5, y = T + h * i / 10 + .5;
+    c.moveTo(x, T); c.lineTo(x, T + h); c.moveTo(L, y); c.lineTo(L + w, y);
+  }
+  c.stroke();
+  paneTag(c, W, true);
+  if (!meta2) {
+    c.fillStyle = '#64748b'; c.font = '13px sans-serif'; c.textAlign = 'left';
+    c.fillText(tr('Lower screen: waiting for data…', '下画面: データ待ち…'), L + 20, T + 30);
+    return;
+  }
+  const m = meta2, linear = lin(m), rl = m.rl, bot = linear ? 0 : rl - 10 * m.ddiv;
+  c.fillStyle = '#94a3b8'; c.font = '11px sans-serif'; c.textAlign = 'right';
+  for (let i = 0; i <= 10; i += (h < 150 ? 2 : 1)) {
+    const v = rl - i * (rl - bot) / 10;
+    c.fillText(linear ? fmtEng(v, '').trim() : v.toFixed(m.ddiv < 1 ? 1 : 0), L - 6, T + h * i / 10 + 4);
+  }
+  c.textAlign = 'left'; c.fillText(fmtX2(0, 3), L, T + h + 18);
+  c.textAlign = 'center'; c.fillText(m.span === 0 ? fmtX2(1, 3) + '  (CF ' + fmtHz(m.cf) + ', zero span)' : fmtX2(1, 3) + '  (SPAN ' + fmtHz(m.span) + ')', L + w / 2, T + h + 18);
+  c.textAlign = 'right'; c.fillText(fmtX2(2, 3), L + w, T + h + 18);
+  if (!trace2 || lo(m.ta) === 2) return;
+  const n = trace2.length, ys = v => T + (rl - v) / (rl - bot) * h;
+  c.save(); c.beginPath(); c.rect(L, T, w, h); c.clip();
+  c.strokeStyle = '#38bdf8'; c.lineWidth = 1.2; c.beginPath();
+  for (let i = 0; i < n; i++) { const x = L + w * i / (n - 1), y = ys(trace2[i]); if (i) c.lineTo(x, y); else c.moveTo(x, y); }
+  c.stroke(); c.restore();
+  let pk = 0; for (let i = 1; i < n; i++) if (trace2[i] > trace2[pk]) pk = i;
+  c.fillStyle = '#94a3b8'; c.textAlign = 'left';
+  c.fillText(tr('peak ', 'ピーク ') + fmtLv2(trace2[pk]) + ' @ ' + fmtX2(pk, n), L + 6, T + 14);
+  if (mouseX2 !== null && mouseX2 >= L && mouseX2 <= L + w) {
+    const i = Math.round((mouseX2 - L) / w * (n - 1)), x = L + w * i / (n - 1) + .5;
+    c.strokeStyle = '#60a5fa'; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(x, T); c.lineTo(x, T + h); c.stroke(); c.setLineDash([]);
+    $('i-cur').textContent = tr('lower ', '下画面 ') + fmtX2(i, n) + ' / ' + fmtLv2(trace2[i]);
+  }
+}
+cv2.addEventListener('mousemove', e => { mouseX2 = e.offsetX; drawLower(); });
+cv2.addEventListener('mouseleave', () => { mouseX2 = null; $('i-cur').textContent = '--'; drawLower(); });
+cv2.addEventListener('wheel', e => onWheel(e), {passive: false});
+
+// ── waterfall ───────────────────────────────────────────────────────────────
+// History of trace A: an offscreen image (1 px per point × WF_ROWS rows, newest
+// row on top) scaled into the waterfall area, plus the level values / times
+// for the hover readout.
+const wf = $('wf'), wctx = wf.getContext('2d');
+const WF_ROWS = 400;
+let wfOn = false;
+try { wfOn = localStorage.getItem('wf') === '1'; } catch (e) {}
+let wfBuf = null, wfVals = [], wfTimes = [], wfMouse = null;
+// Turbo colour map (polynomial approximation), precomputed as a 256-entry LUT
+const WF_LUT = (() => {
+  const lut = new Uint8ClampedArray(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const x = i / 255;
+    lut[i * 3]     = 34.61 + x * (1172.33 - x * (10793.56 - x * (33300.12 - x * (38394.49 - x * 14825.05))));
+    lut[i * 3 + 1] = 23.31 + x * (557.33 + x * (1225.33 - x * (3574.96 - x * (1073.77 + x * 707.56))));
+    lut[i * 3 + 2] = 27.2 + x * (3211.1 - x * (15327.97 - x * (27814 - x * (22569.18 - x * 6838.66))));
+  }
+  return lut;
+})();
+// Colour range: 'ref' = reference level … bottom of the screen; 'auto' = fitted
+// to the recent data. Rows are painted with wfPaint (the range the whole image
+// currently uses); in auto mode the image is repainted when the fitted range
+// has moved by more than WF_TOL of its span.
+let wfMode = 'auto';
+try { wfMode = localStorage.getItem('wfmode') === 'ref' ? 'ref' : 'auto'; } catch (e) {}
+let wfFit = null, wfPaint = null, wfRepainted = false;
+const WF_FIT_ROWS = 40, WF_TOL = 0.06;
+function refRange() {
+  if (!meta) return [0, 1];
+  return lin(meta) ? [0, meta.rl] : [meta.rl - 10 * meta.ddiv, meta.rl];
+}
+function wfRange() { return wfPaint || refRange(); }
+// fitted range from the newest rows: noise floor (5th percentile) … maximum
+function wfFitTarget() {
+  const rows = wfVals.slice(0, WF_FIT_ROWS), sample = [];
+  let mx = -Infinity;
+  for (const r of rows) for (let i = 0; i < r.length; i += 3) { const v = r[i]; if (isFinite(v)) { sample.push(v); if (v > mx) mx = v; } }
+  if (sample.length < 10) return null;
+  sample.sort((a, b) => a - b);
+  const p5 = sample[Math.floor(sample.length * 0.05)];
+  if (lin(meta)) return [Math.max(0, p5 * 0.9), Math.max(mx * 1.1, p5 * 1.5 + 1e-12)];
+  let lo = p5 - 3, hi = mx + 3;
+  if (hi - lo < 15) hi = lo + 15;
+  return [lo, hi];
+}
+function wfUpdateRange() {
+  if (wfMode === 'ref') {
+    const r = refRange();
+    if (!wfPaint || wfPaint[0] !== r[0] || wfPaint[1] !== r[1]) { wfPaint = r; wfRepaint(); }
+    return;
+  }
+  const t = wfFitTarget();
+  if (!t) { if (!wfPaint) wfPaint = refRange(); return; }
+  // smooth the fitted range, repaint only on a noticeable change
+  wfFit = wfFit ? [wfFit[0] + (t[0] - wfFit[0]) * 0.25, wfFit[1] + (t[1] - wfFit[1]) * 0.25] : t;
+  const span = Math.max(1e-12, wfFit[1] - wfFit[0]);
+  if (!wfPaint || Math.abs(wfFit[0] - wfPaint[0]) > span * WF_TOL || Math.abs(wfFit[1] - wfPaint[1]) > span * WF_TOL) {
+    wfPaint = [wfFit[0], wfFit[1]];
+    wfRepaint();
+  }
+}
+function wfColour(px, o, v, lo, hi) {
+  const k = Math.max(0, Math.min(255, Math.round((v - lo) / (hi - lo) * 255))) * 3;
+  px[o] = WF_LUT[k]; px[o + 1] = WF_LUT[k + 1]; px[o + 2] = WF_LUT[k + 2]; px[o + 3] = 255;
+}
+// repaint the whole history with the current paint range
+function wfRepaint() {
+  if (!wfBuf || !wfVals.length) return;
+  wfRepainted = true;
+  const n = wfBuf.width, rows = wfVals.length, b = wfBuf.getContext('2d');
+  const img = b.createImageData(n, rows), px = img.data, [lo, hi] = wfPaint;
+  for (let r = 0; r < rows; r++) {
+    const row = wfVals[r];
+    for (let i = 0; i < n; i++) wfColour(px, (r * n + i) * 4, row[i], lo, hi);
+  }
+  b.putImageData(img, 0, 0);
+}
+function wfClear() { wfBuf = null; wfVals = []; wfTimes = []; wfFit = null; wfPaint = null; drawWF(); }
+function wfPush(t) {
+  if (!wfOn || !meta) return;
+  const n = t.length;
+  if (!wfBuf || wfBuf.width !== n) {
+    wfBuf = document.createElement('canvas'); wfBuf.width = n; wfBuf.height = WF_ROWS;
+    const b = wfBuf.getContext('2d'); b.fillStyle = '#0b1220'; b.fillRect(0, 0, n, WF_ROWS);
+    wfVals = []; wfTimes = [];
+  }
+  const b = wfBuf.getContext('2d');
+  wfVals.unshift(t); wfTimes.unshift(performance.now());
+  if (wfVals.length > WF_ROWS) { wfVals.pop(); wfTimes.pop(); }
+  wfRepainted = false;
+  wfUpdateRange();                                    // may repaint the whole image (incl. the new row)
+  if (!wfRepainted) {
+    b.drawImage(wfBuf, 0, 0, n, WF_ROWS - 1, 0, 1, n, WF_ROWS - 1);   // scroll down one row
+    const [lo, hi] = wfRange(), row = b.createImageData(n, 1), px = row.data;
+    for (let i = 0; i < n; i++) wfColour(px, i * 4, t[i], lo, hi);
+    b.putImageData(row, 0, 0);
+  }
+  drawWF();
+}
+function fmtAge(ms) { const s = ms / 1000; return s < 60 ? trimNum(s, 1) + ' s' : trimNum(s / 60, 1) + ' min'; }
+function drawWF() {
+  if (!wfOn) return;
+  const W = wf.clientWidth, H = wf.clientHeight, L = G.L, R = G.R, T = 6, B = 6, w = W - L - R, h = H - T - B;
+  wctx.clearRect(0, 0, W, H);
+  wctx.fillStyle = '#0b1220'; wctx.fillRect(L, T, w, h);
+  if (wfBuf) { wctx.imageSmoothingEnabled = true; wctx.drawImage(wfBuf, 0, 0, wfBuf.width, WF_ROWS, L, T, w, h); }
+  // colour bar with the level range (left margin)
+  const [lo, hi] = wfRange(), cb = wctx.createLinearGradient(0, T + h, 0, T);
+  for (let i = 0; i <= 8; i++) { const k = Math.round(i / 8 * 255) * 3; cb.addColorStop(i / 8, `rgb(${WF_LUT[k]},${WF_LUT[k + 1]},${WF_LUT[k + 2]})`); }
+  wctx.fillStyle = cb; wctx.fillRect(8, T, 8, h);
+  wctx.fillStyle = '#94a3b8'; wctx.font = '10px sans-serif'; wctx.textAlign = 'left';
+  wctx.fillText(meta ? (lin(meta) ? fmtEng(hi, '') : trimNum(hi, 1)) : '', 19, T + 9);
+  wctx.fillText(meta ? (lin(meta) ? fmtEng(lo, '') : trimNum(lo, 1)) : '', 19, T + h - 2);
+  wctx.fillText(unitName(), 19, T + h / 2 + 3);
+  wctx.fillStyle = '#64748b';
+  wctx.fillText(wfMode === 'auto' ? tr('auto', '自動') : tr('ref', '基準'), 19, T + h / 2 + 15);
+  // time labels
+  const rowH = h / WF_ROWS;
+  wctx.fillStyle = '#e2e8f0'; wctx.textAlign = 'right';
+  wctx.fillText(tr('now', '現在'), L + w - 4, T + 10);
+  if (wfTimes.length > 1) {
+    const last = Math.min(wfTimes.length - 1, WF_ROWS - 1);
+    wctx.fillText('−' + fmtAge(wfTimes[0] - wfTimes[last]), L + w - 4, Math.min(T + h - 3, T + (last + 1) * rowH));
+  } else if (!wfTimes.length) {
+    wctx.textAlign = 'left'; wctx.fillStyle = '#64748b'; wctx.font = '12px sans-serif';
+    wctx.fillText(tr('Waterfall: waiting for trace data…', 'ウォーターフォール: 波形データ待ち…'), L + 12, T + 18);
+  }
+  // hover cursor
+  if (wfMouse && wfMouse.x >= L && wfMouse.x <= L + w && wfMouse.y >= T && wfMouse.y <= T + h) {
+    wctx.strokeStyle = 'rgba(255,255,255,.6)'; wctx.setLineDash([3, 3]); wctx.beginPath();
+    wctx.moveTo(wfMouse.x + .5, T); wctx.lineTo(wfMouse.x + .5, T + h);
+    wctx.moveTo(L, wfMouse.y + .5); wctx.lineTo(L + w, wfMouse.y + .5); wctx.stroke(); wctx.setLineDash([]);
+  }
+}
+function setWaterfall(on) {
+  wfOn = on;
+  try { localStorage.setItem('wf', on ? '1' : '0'); } catch (e) {}
+  $('wfon').checked = on;
+  if (!on) wfClear();
+  resize();
+}
+$('wfon').addEventListener('change', e => setWaterfall(e.target.checked));
+$('btn-wfclr').onclick = () => wfClear();
+$('wfmode').addEventListener('change', e => {
+  wfMode = e.target.value === 'ref' ? 'ref' : 'auto';
+  try { localStorage.setItem('wfmode', wfMode); } catch (err) {}
+  wfFit = null; wfPaint = null;
+  if (wfVals.length) { wfUpdateRange(); if (!wfPaint) wfPaint = refRange(); wfRepaint(); }
+  drawWF();
+});
+wf.addEventListener('mousemove', e => {
+  wfMouse = {x: e.offsetX, y: e.offsetY};
+  mouseX = e.offsetX; draw();                        // same X axis: show the cursor on the spectrum too
+  const L = G.L, w = wf.clientWidth - G.L - G.R, h = wf.clientHeight - 12;
+  const r = Math.floor((e.offsetY - 6) / h * WF_ROWS), row = wfVals[r];
+  if (row && e.offsetX >= L && e.offsetX <= L + w) {
+    const i = Math.round((e.offsetX - L) / w * (row.length - 1));
+    $('i-cur').textContent = fmtX(i, row.length) + ' / ' + FMT.level(row[i]) + '  (' + tr('WF ', 'WF ') + '−' + fmtAge(wfTimes[0] - wfTimes[r]) + ')';
+  }
+  drawWF();
+});
+wf.addEventListener('mouseleave', () => { wfMouse = null; mouseX = null; $('i-cur').textContent = '--'; draw(); drawWF(); });
+wf.addEventListener('click', e => clickMarker(e.offsetX, wf.clientWidth));
+wf.addEventListener('wheel', e => onWheel(e), {passive: false});
+
+function draw() {
+  const W = cv.clientWidth, H = cv.clientHeight;
+  const {L, R, T, B} = G, w = W - L - R, h = H - T - B;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(L, T, w, h);
+  ctx.strokeStyle = '#1f3352'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let i = 0; i <= 10; i++) {
+    const x = L + w * i / 10 + .5, y = T + h * i / 10 + .5;
+    ctx.moveTo(x, T); ctx.lineTo(x, T + h); ctx.moveTo(L, y); ctx.lineTo(L + w, y);
+  }
+  ctx.stroke();
+  if (!meta) {
+    ctx.fillStyle = '#64748b'; ctx.font = '14px sans-serif';
+    ctx.fillText(tr('Press Start (or REPEAT / SINGLE) to capture the R3267 trace', '「開始」（または REPEAT / SINGLE）を押すと R3267 の波形を取り込みます'), L + 20, T + 30);
+    return;
+  }
+  const linear = lin(meta), rl = meta.rl, bot = linear ? 0 : rl - 10 * meta.ddiv;
+  ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+  for (let i = 0; i <= 10; i++) {
+    const v = rl - i * (rl - bot) / 10;
+    ctx.fillText(linear ? fmtEng(v, '').trim() : v.toFixed(meta.ddiv < 1 ? 1 : 0), L - 6, T + h * i / 10 + 4);
+  }
+  ctx.textAlign = 'left'; ctx.fillText(fmtX(0, 3), L, T + h + 18);
+  ctx.textAlign = 'center'; ctx.fillText(zeroSpan() ? fmtX(1, 3) + '  (CF ' + fmtHz(meta.cf) + ')' : fmtX(1, 3), L + w / 2, T + h + 18);
+  ctx.textAlign = 'right'; ctx.fillText(fmtX(2, 3), L + w, T + h + 18);
+  ctx.save(); ctx.translate(14, T + h / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.fillText(unitName(), 0, 0); ctx.restore();
+  if (splitOn) paneTag(ctx, W, false);
+
+  const ys = v => T + (rl - v) / (rl - bot) * h;
+  const plot = (arr, color, lw) => {
+    if (!arr) return;
+    const n = arr.length;
+    ctx.save(); ctx.beginPath(); ctx.rect(L, T, w, h); ctx.clip();
+    ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.beginPath();
+    for (let i = 0; i < n; i++) { const x = L + w * i / (n - 1), y = ys(arr[i]); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+    ctx.stroke(); ctx.restore();
+  };
+  // windows: channel power / display window (yellow), ACP BS windows (cyan)
+  const fx = f => L + (f - meta.fa) / (meta.fb - meta.fa) * w;
+  const band = (f0, f1, fill, stroke, label) => {
+    let x0 = fx(f0), x1 = fx(f1);
+    if (x1 < L || x0 > L + w) return;
+    x0 = Math.max(L, x0); x1 = Math.min(L + w, x1);
+    ctx.fillStyle = fill; ctx.fillRect(x0, T, Math.max(1, x1 - x0), h);
+    ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(x0 + .5, T); ctx.lineTo(x0 + .5, T + h); ctx.moveTo(x1 - .5, T); ctx.lineTo(x1 - .5, T + h); ctx.stroke();
+    ctx.setLineDash([]);
+    if (label) { ctx.fillStyle = stroke; ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(label, (x0 + x1) / 2, T + 12); }
+  };
+  if (!zeroSpan() && meta.fb > meta.fa) {
+    const wlx = stNum('WLX?'), wdx = stNum('WDX?');
+    if ((st['PWCHON?'] === '1' || meta.wdo) && wlx != null && wdx != null)
+      band(wlx - wdx / 2, wlx + wdx / 2, 'rgba(250,204,21,.10)', '#facc15', st['PWCHON?'] === '1' ? 'CH' : 'WIN');
+    const bs = stNum('CARRBS?');
+    if (st['ACPON?'] === '1' && st['ACPBSW?'] === '1' && bs) {
+      band(meta.cf - bs / 2, meta.cf + bs / 2, 'rgba(34,211,238,.12)', '#22d3ee', 'BS');
+      const lines = (results['ACP?'] || '').split('\n'), n = parseInt(lines[0], 10) || 0;
+      for (const l of lines.slice(1, 1 + n)) {
+        const v = l.split(',').map(Number);
+        for (const off of [v[0], v[2]]) if (isFinite(off) && Math.abs(off) < 9.99e8)
+          band(meta.cf + off - bs / 2, meta.cf + off + bs / 2, 'rgba(34,211,238,.07)', '#0891b2', '');
+      }
+    }
+  }
+  // ACP separate screen: only the carrier window (trace A) is readable over GPIB
+  if (st['ACPON?'] === '1' && st['ACPSCR?'] === '1') {
+    const msg = [tr('ACP separate screen: over GPIB the R3267 returns only the carrier window (trace A, span = BS).',
+                    'ACP 分割表示: GPIB で取得できるのはキャリアウィンドウ（トレース A、スパン = BS）だけです。'),
+                 tr('The full-span screen is shown on the R3267 only. Use "Screen Full" to see the full span with the BS windows here.',
+                    '全スパンの画面は R3267 本体にのみ表示されます。ここで全スパンと BS ウィンドウを見るには「Screen Full」を使ってください。')];
+    ctx.font = '12px sans-serif'; ctx.textAlign = 'left';
+    const bw = Math.min(w - 20, Math.max(...msg.map(t => ctx.measureText(t).width)) + 20);
+    ctx.fillStyle = 'rgba(69,26,3,.9)'; ctx.fillRect(L + 10, T + h - 52, bw, 42);
+    ctx.strokeStyle = '#fb923c'; ctx.strokeRect(L + 10.5, T + h - 51.5, bw - 1, 41);
+    ctx.fillStyle = '#fed7aa'; msg.forEach((t, i) => ctx.fillText(t, L + 20, T + h - 34 + i * 16));
+  }
+  // display line (FORMAT)
+  if (meta.dlon && isFinite(meta.dl) && meta.dl <= rl && meta.dl >= bot) {
+    const y = ys(meta.dl) + .5;
+    ctx.strokeStyle = '#f97316'; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + w, y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#f97316'; ctx.textAlign = 'left'; ctx.fillText('DL ' + FMT.level(meta.dl), L + 4, y - 4);
+  }
+  if ($('maxhold').checked) plot(hold, '#f59e0b', 1);
+  if (lo(meta.tb) !== 2) plot(traceB, '#e879f9', 1);
+  if (lo(meta.ta) !== 2) plot(trace, '#4ade80', 1.2);
+  if (!trace) return;
+  const n = trace.length;
+  // browser peak (red triangle)
+  let pk = 0; for (let i = 1; i < n; i++) if (trace[i] > trace[pk]) pk = i;
+  const px = L + w * pk / (n - 1), py = ys(trace[pk]);
+  ctx.fillStyle = '#f87171'; ctx.beginPath(); ctx.moveTo(px, py - 4); ctx.lineTo(px - 5, py - 13); ctx.lineTo(px + 5, py - 13); ctx.fill();
+  // instrument marker (cyan diamond)
+  const mi = markerIndex();
+  if (mi >= 0) {
+    const mx = L + w * mi / (n - 1), my = Math.max(T + 8, Math.min(T + h, ys(trace[mi])));
+    ctx.fillStyle = '#22d3ee'; ctx.beginPath(); ctx.moveTo(mx, my - 14); ctx.lineTo(mx + 6, my - 8); ctx.lineTo(mx, my - 2); ctx.lineTo(mx - 6, my - 8); ctx.fill();
+    ctx.font = '11px sans-serif'; ctx.textAlign = mx > L + w * .75 ? 'right' : 'left';
+    ctx.fillText('MKR ' + fmtMk(meta.mkf) + '  ' + FMT.level(trace[mi]), mx + (ctx.textAlign === 'right' ? -10 : 10), my - 16);
+  }
+  // peak search condition (SRCH): X window in violet (Inner: inside, Outer: outside is searched)
+  const mksx = st['MKSX?'], spos = stNum('MKSPOS?'), swid = stNum('MKSWID?');
+  if ((mksx === '1' || mksx === '2') && spos != null && swid != null) {
+    const xOf = v => zeroSpan() ? (meta.swt > 0 ? L + v / meta.swt * w : NaN) : (meta.fb > meta.fa ? fx(v) : NaN);
+    const x0 = xOf(spos - swid / 2), x1 = xOf(spos + swid / 2);
+    if (isFinite(x0) && isFinite(x1)) {
+      const a = Math.max(L, Math.min(L + w, x0)), b = Math.max(L, Math.min(L + w, x1));
+      ctx.fillStyle = 'rgba(167,139,250,.10)';
+      if (mksx === '1') ctx.fillRect(a, T, Math.max(1, b - a), h);
+      else { ctx.fillRect(L, T, a - L, h); ctx.fillRect(b, T, L + w - b, h); }
+      ctx.strokeStyle = '#a78bfa'; ctx.lineWidth = 1; ctx.setLineDash([5, 3]); ctx.beginPath();
+      for (const x of [x0, x1]) if (x >= L && x <= L + w) { ctx.moveTo(Math.round(x) + .5, T); ctx.lineTo(Math.round(x) + .5, T + h); }
+      ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = '#a78bfa'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(tr('SRCH ', 'サーチ ') + (mksx === '1' ? 'IN' : 'OUT'), mksx === '1' ? (a + b) / 2 : (a - L > L + w - b ? (L + a) / 2 : (b + L + w) / 2), T + h - 6);
+    }
+  }
+  // Y search range: shade the searched side of the display line
+  if (st['MKSY?'] === '1' && meta.dlon && isFinite(meta.dl) && meta.dl <= rl && meta.dl >= bot) {
+    const y = ys(meta.dl), up = st['MKSYDL?'] !== '1';
+    ctx.fillStyle = 'rgba(249,115,22,.06)';
+    if (up) ctx.fillRect(L, T, w, y - T); else ctx.fillRect(L, y, w, T + h - y);
+    ctx.fillStyle = '#f97316'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(tr('search ', 'サーチ ') + (up ? '▲' : '▼'), L + w - 4, up ? y - 4 : y + 13);
+  }
+  // XY cursor (TRACE A → XY Cursor): X / Y lines, plus the anchor marker when one is set
+  // (CSRDX? / CSRDY? = position relative to the anchor; -999999999 = no anchor)
+  if (st['XYCSR?'] === '1') {
+    const cx = stNum('CSRX?'), cy = stNum('CSRY?'), dx = stNum('CSRDX?'), dy = stNum('CSRDY?');
+    const xOf = v => zeroSpan() ? (meta.swt > 0 ? L + v / meta.swt * w : NaN) : (meta.fb > meta.fa ? fx(v) : NaN);
+    const inX = x => isFinite(x) && x >= L && x <= L + w, inY = y => isFinite(y) && y >= T && y <= T + h;
+    const X = cx != null ? xOf(cx) : NaN, Y = cy != null ? ys(cy) : NaN;
+    ctx.save(); ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1; ctx.setLineDash([2, 3]); ctx.beginPath();
+    if (inX(X)) { ctx.moveTo(Math.round(X) + .5, T); ctx.lineTo(Math.round(X) + .5, T + h); }
+    if (inY(Y)) { ctx.moveTo(L, Math.round(Y) + .5); ctx.lineTo(L + w, Math.round(Y) + .5); }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.font = '11px sans-serif'; ctx.fillStyle = '#e2e8f0';
+    if (inX(X)) { ctx.textAlign = X > L + w * .8 ? 'right' : 'left'; ctx.fillText('X ' + fmtMk(cx), X + (ctx.textAlign === 'left' ? 4 : -4), T + h - 6); }
+    if (inY(Y)) { ctx.textAlign = 'left'; ctx.fillText('Y ' + FMT.level(cy), L + 4, Y - 4); }
+    const anc = dx != null && dy != null && Math.abs(dx) < 9.99e8 && Math.abs(dy) < 9.99e8;
+    if (anc) {
+      const ax = xOf(cx - dx), ay = ys(cy - dy);
+      if (inX(ax) && inY(ay)) {
+        ctx.strokeStyle = '#fb923c'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(ax, ay, 6, 0, 2 * Math.PI); ctx.moveTo(ax - 10, ay); ctx.lineTo(ax + 10, ay); ctx.moveTo(ax, ay - 10); ctx.lineTo(ax, ay + 10); ctx.stroke();
+        ctx.fillStyle = '#fb923c'; ctx.textAlign = 'left'; ctx.fillText(tr('Anchor', 'アンカー'), ax + 9, ay + 15);
+      }
+      if (inX(X) && inY(Y)) {   // relative readout at the cursor intersection
+        const t = 'ΔX ' + (zeroSpan() ? fmtTime(dx) : fmtHz(dx)) + '  ΔY ' + trimNum(dy, 2) + (lin(meta) ? ' ' + unitName() : ' dB');
+        ctx.font = 'bold 11px sans-serif'; ctx.textAlign = X > L + w * .7 ? 'right' : 'left';
+        const tw = ctx.measureText(t).width, tx = ctx.textAlign === 'left' ? X + 6 : X - 6, ty = Y > T + 30 ? Y - 8 : Y + 18;
+        ctx.fillStyle = 'rgba(15,23,42,.85)'; ctx.fillRect(ctx.textAlign === 'left' ? tx - 2 : tx - tw - 2, ty - 12, tw + 4, 16);
+        ctx.fillStyle = '#fdba74'; ctx.fillText(t, tx, ty);
+      }
+    }
+    ctx.restore();
+  }
+  // peak list markers (PLS FREQ / LEVEL): numbered in the instrument's order
+  if (plsMode && results['PKLST?']) {
+    const lines = results['PKLST?'].split('\n'), cnt = parseInt(lines[0], 10) || 0;
+    let k = 0;
+    ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+    for (const l of lines.slice(1, 1 + cnt)) {
+      const [x0] = l.split(',').map(Number);
+      if (!isFinite(x0) || Math.abs(x0) >= 9.99e8) continue;
+      k++;
+      const i = zeroSpan() ? (meta.swt > 0 ? Math.round(x0 / meta.swt * (n - 1)) : -1)
+                           : Math.round((x0 - meta.fa) / (meta.fb - meta.fa) * (n - 1));
+      if (i < 0 || i >= n) continue;
+      const x = L + w * i / (n - 1), y = Math.max(T + 22, Math.min(T + h, ys(trace[i])));
+      ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.moveTo(x, y - 3); ctx.lineTo(x - 5, y - 11); ctx.lineTo(x + 5, y - 11); ctx.fill();
+      ctx.fillStyle = 'rgba(15,23,42,.85)'; ctx.fillRect(x - 7, y - 25, 14, 13);
+      ctx.fillStyle = '#fde047'; ctx.fillText(String(k), x, y - 15);
+    }
+    ctx.textAlign = 'right'; ctx.font = '11px sans-serif'; ctx.fillStyle = '#fde047';
+    ctx.fillText(tr('Peak list (', 'ピークリスト（') + (plsMode === 'FREQ' ? tr('freq order', '周波数順') : tr('level order', 'レベル順')) + ')',
+                 L + w - 6, T + (splitOn ? 32 : 14));
+  }
+  // mouse cursor
+  if (mouseX !== null && mouseX >= L && mouseX <= L + w) {
+    const i = Math.round((mouseX - L) / w * (n - 1));
+    ctx.strokeStyle = '#60a5fa'; ctx.setLineDash([4, 4]); ctx.beginPath();
+    ctx.moveTo(L + w * i / (n - 1) + .5, T); ctx.lineTo(L + w * i / (n - 1) + .5, T + h); ctx.stroke(); ctx.setLineDash([]);
+    $('i-cur').textContent = fmtX(i, n) + ' / ' + FMT.level(trace[i]) +
+      (traceB && lo(meta.tb) !== 2 ? '  (B ' + FMT.level(traceB[i]) + ')' : '');
+  }
+}
+
+// ── saving: CSV / PNG / recording ───────────────────────────────────────────
+const pad2 = v => String(v).padStart(2, '0');
+function stamp(d = new Date()) {
+  return d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + '_' + pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds());
+}
+function isoLocal(d) {
+  const o = -d.getTimezoneOffset(), sg = o >= 0 ? '+' : '-', a = Math.abs(o);
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' +
+    pad2(d.getSeconds()) + '.' + String(d.getMilliseconds()).padStart(3, '0') + sg + pad2(Math.floor(a / 60)) + ':' + pad2(a % 60);
+}
+function download(name, blob) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+const csvNum = (v, m) => !isFinite(v) ? '' : lin(m) ? v.toPrecision(6) : v.toFixed(2);
+// settings as "# key,value" header lines
+function settingsLines(m) {
+  const u = unitName(), L = [];
+  const add = (k, v) => { if (v != null && v !== '' && !(typeof v === 'number' && !isFinite(v))) L.push('# ' + k + ',' + v); };
+  add('instrument', 'ADVANTEST R3267 (GPIB ' + (m.addr != null ? m.addr : $('addr').value) + ')');
+  add('saved', isoLocal(new Date()));
+  add('center_Hz', m.cf); add('span_Hz', m.span); add('start_Hz', m.fa); add('stop_Hz', m.fb);
+  add('rbw_Hz', m.rbw); add('vbw_Hz', m.vbw); add('sweep_time_s', m.swt); add('attenuator_dB', m.att);
+  add('ref_level_' + u, m.rl); add('scale', lin(m) ? 'linear' : m.ddiv + ' dB/div'); add('unit', u);
+  add('points', m.npts);
+  if (m.ta != null) add('trace_A', TRMODE[lo(m.ta)] + TRADD[hi(m.ta)]);
+  if (m.tb != null) add('trace_B', TRMODE[lo(m.tb)] + TRADD[hi(m.tb)]);
+  if (m.det != null) add('detector', DETN[m.det]);
+  if (m.single) add('sweep', 'single');
+  return L;
+}
+function extraLines() {
+  const L = [], u = unitName(), xu = zeroSpan() ? 's' : 'Hz';
+  const mi = markerIndex();
+  if (meta.mkr && isFinite(meta.mkf)) L.push('# marker(x_' + xu + ';level_' + u + '),' + meta.mkf + (mi >= 0 && trace ? ',' + csvNum(trace[mi], meta) : ''));
+  if (st['XYCSR?'] === '1') {
+    const cx = stNum('CSRX?'), cy = stNum('CSRY?'), dx = stNum('CSRDX?'), dy = stNum('CSRDY?');
+    if (cx != null && cy != null) L.push('# xy_cursor(x_' + xu + ';y_' + u + '),' + cx + ',' + cy);
+    if (cx != null && cy != null && dx != null && dy != null)
+      L.push('# xy_anchor(x_' + xu + ';y_' + u + ';dx;dy),' + (cx - dx) + ',' + (cy - dy) + ',' + dx + ',' + dy);
+  }
+  if (plsMode && results['PKLST?']) {
+    const lines = results['PKLST?'].split('\n'), n = parseInt(lines[0], 10) || 0;
+    let k = 0;
+    for (const l of lines.slice(1, 1 + n)) {
+      const [x, y] = l.split(',').map(Number);
+      if (!isFinite(x) || Math.abs(x) >= 9.99e8) continue;
+      L.push('# peak_' + (++k) + '(x_' + xu + ';level_' + u + '),' + x + ',' + y);
+    }
+  }
+  return L;
+}
+function saveCSV() {
+  if (!meta || !trace) { $('msg').textContent = tr('No trace to save yet.', 'まだ保存する波形がありません。'); return; }
+  const n = trace.length, zs = zeroSpan(), u = unitName();
+  const cols = [[zs ? 'time_s' : 'freq_Hz', i => zs ? ((meta.swt || 0) * i / (n - 1)).toPrecision(9) : String(Math.round(freqAt(i, n)))]];
+  if (lo(meta.ta) !== 2) cols.push(['A_' + u, i => csvNum(trace[i], meta)]);
+  if (traceB && lo(meta.tb) !== 2 && traceB.length === n) cols.push(['B_' + u, i => csvNum(traceB[i], meta)]);
+  if ($('maxhold').checked && hold && hold.length === n) cols.push(['maxhold_' + u, i => csvNum(hold[i], meta)]);
+  const L = ['# R3267 trace', ...settingsLines(meta), ...extraLines()];
+  if (splitOn && meta2 && trace2 && trace2.length === n) {   // lower screen: its own X axis
+    const m2 = meta2, z2 = m2.span === 0;
+    L.push('# lower_screen,' + (SPLIT_NAME[meta.mltscr] || 'split'), '# lower_center_Hz,' + m2.cf, '# lower_span_Hz,' + m2.span,
+           '# lower_sweep_time_s,' + m2.swt, '# lower_ref_level,' + m2.rl, '# lower_scale,' + (lin(m2) ? 'linear' : m2.ddiv + ' dB/div'));
+    cols.push([z2 ? 'lower_time_s' : 'lower_freq_Hz', i => z2 ? ((m2.swt || 0) * i / (n - 1)).toPrecision(9) : String(Math.round(m2.fa + (m2.fb - m2.fa) * i / (n - 1)))]);
+    cols.push(['lower_A', i => csvNum(trace2[i], m2)]);
+  }
+  L.push(cols.map(c => c[0]).join(','));
+  for (let i = 0; i < n; i++) L.push(cols.map(c => c[1](i)).join(','));
+  download('r3267_' + stamp() + '.csv', new Blob([L.join('\r\n') + '\r\n'], {type: 'text/csv'}));
+}
+function savePNG() {
+  if (!meta) { $('msg').textContent = tr('No trace to save yet.', 'まだ保存する波形がありません。'); return; }
+  resize();   // canvases sized and drawn for the current layout
+  const d = window.devicePixelRatio || 1, wrapR = $('wrap').getBoundingClientRect();
+  const parts = [cv, cv2, wf].filter(c => c.style.display !== 'none' && c.width > 1 && c.height > 1);
+  const footH = 22, W = Math.round(wrapR.width * d), H = Math.round(wrapR.height * d) + Math.round(footH * d);
+  const out = document.createElement('canvas'); out.width = W; out.height = H;
+  const o = out.getContext('2d');
+  o.fillStyle = '#111827'; o.fillRect(0, 0, W, H);
+  for (const c of parts) { const r = c.getBoundingClientRect(); o.drawImage(c, Math.round((r.left - wrapR.left) * d), Math.round((r.top - wrapR.top) * d), c.width, c.height); }
+  o.setTransform(d, 0, 0, d, 0, 0);
+  o.fillStyle = '#94a3b8'; o.font = '12px sans-serif'; o.textAlign = 'left';
+  o.fillText('R3267  ' + new Date().toLocaleString() + '   CF ' + fmtHz(meta.cf) + '  SPAN ' + fmtHz(meta.span) + '  RBW ' + fmtHz(meta.rbw) +
+             '  VBW ' + fmtHz(meta.vbw) + '  SWP ' + fmtTime(meta.swt) + '  ATT ' + FMT.db(meta.att) + '  REF ' + FMT.level(meta.rl), 8, wrapR.height + 15);
+  out.toBlob(b => download('r3267_' + stamp() + '.png', b), 'image/png');
+}
+// recording: every trace-A frame → one CSV row (time, elapsed, levels)
+const REC_MAX = 20000;
+let rec = null;
+function recLabel() {
+  const b = $('btn-rec');
+  if (!rec) { b.textContent = '\u25CF REC'; b.className = ''; return; }
+  const sec = Math.round(((rec.rows.length ? rec.rows[rec.rows.length - 1][0] : Date.now()) - rec.t0) / 1000);
+  b.textContent = '\u25A0 REC ' + rec.rows.length + ' (' + Math.floor(sec / 60) + ':' + pad2(sec % 60) + ')'; b.className = 'on';
+}
+function recStart() {
+  if (!meta) { $('msg').textContent = tr('Start the capture first.', '先に取り込みを開始してください。'); return; }
+  rec = {meta: Object.assign({}, meta), zs: zeroSpan(), u: unitName(), t0: Date.now(), rows: []};
+  recLabel();
+  if (!running) $('msg').textContent = tr('Recording: waiting for frames (press Start).', '記録中: フレーム待ち（開始を押してください）。');
+}
+function recPush(t) {
+  if (!rec) return;
+  if (t.length !== rec.meta.npts) return;
+  rec.rows.push([Date.now(), Float32Array.from(t)]);
+  if (rec.rows.length >= REC_MAX) { recStop(tr('Recording reached ' + REC_MAX + ' frames and was saved.', '記録が ' + REC_MAX + ' フレームに達したため保存しました。')); return; }
+  if (rec.rows.length % 4 === 1) recLabel();
+}
+function recAxisChanged() { if (rec && rec.rows.length) recStop(tr('Settings changed: the recording was saved.', '設定が変わったため、記録を保存しました。')); else if (rec) rec.meta = Object.assign({}, meta); }
+function recStop(note) {
+  const r = rec; rec = null; recLabel();
+  if (!r || !r.rows.length) { $('msg').textContent = tr('Nothing was recorded.', '記録されたフレームがありません。'); return; }
+  const m = r.meta, n = m.npts, xs = [];
+  for (let i = 0; i < n; i++) xs.push(r.zs ? ((m.swt || 0) * i / (n - 1)).toPrecision(9) : String(Math.round(m.fa + (m.fb - m.fa) * i / (n - 1))));
+  const L = ['# R3267 recording (trace A, one row per frame)', ...settingsLines(m),
+             '# frames,' + r.rows.length, '# x_axis,' + (r.zs ? 'time_s' : 'freq_Hz'), 'time,elapsed_s,' + xs.join(',')];
+  for (const [t, v] of r.rows) {
+    let line = isoLocal(new Date(t)) + ',' + ((t - r.t0) / 1000).toFixed(3);
+    for (let i = 0; i < n; i++) line += ',' + csvNum(v[i], m);
+    L.push(line);
+  }
+  download('r3267_rec_' + stamp(new Date(r.t0)) + '.csv', new Blob([L.join('\r\n') + '\r\n'], {type: 'text/csv'}));
+  if (note) $('msg').textContent = note;
+}
+$('btn-csv').onclick = saveCSV;
+$('btn-png').onclick = savePNG;
+$('btn-rec').onclick = () => rec ? recStop() : recStart();
+
+// ── events ──────────────────────────────────────────────────────────────────
+$('addr').addEventListener('change', () => {
+  const v = +$('addr').value;
+  if (!(v >= 0 && v <= 30)) return;
+  authFetch('/api/gpib_addr', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: 'dev=sa&addr=' + encodeURIComponent($('addr').value)}).catch(function () {});
+});
+$('btn-start').onclick = () => { hold = null; send({cmd: 'start', addr: +$('addr').value}); };
+$('btn-stop').onclick = () => send({cmd: 'stop'});
+$('btn-clear').onclick = () => { hold = null; draw(); };
+cv.addEventListener('mousemove', e => { mouseX = e.offsetX; draw(); });
+cv.addEventListener('mouseleave', () => { mouseX = null; $('i-cur').textContent = '--'; draw(); });
+// click on the trace (or the waterfall): move the instrument marker there
+function clickMarker(offsetX, width) {
+  if (!meta || !trace) return;
+  const w = width - G.L - G.R, x = offsetX - G.L;
+  if (x < 0 || x > w || (!zeroSpan() && meta.fb === meta.fa)) return;
+  if (zeroSpan()) { sendKey('MK ' + arg((meta.swt || 0) * x / w, 'SC')); return; }   // time-domain marker
+  sendKey('MK ' + arg(Math.round(meta.fa + (meta.fb - meta.fa) * x / w), 'HZ'));
+}
+cv.addEventListener('click', e => clickMarker(e.offsetX, cv.clientWidth));
+// PC keyboard: digits, '.', '-', Backspace, Enter (default unit), Esc, arrows
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (/^[0-9]$/.test(e.key)) keyPress(e.key);
+  else if (e.key === '.' || e.key === '-') keyPress(e.key);
+  else if (e.key === 'Backspace') keyPress('BS');
+  else if (e.key === 'Escape') keyPress('CLR');
+  else if (e.key === 'Enter') enterDefault();
+  else if (e.key === 'ArrowUp') stepActive(1, false, 1);
+  else if (e.key === 'ArrowDown') stepActive(-1, false, 1);
+  else if (e.key === 'ArrowRight') jog(1, false);
+  else if (e.key === 'ArrowLeft') jog(-1, false);
+  else return;
+  e.preventDefault();
+});
+window.addEventListener('resize', resize);
+// the graph area also changes when the info bar or toolbar wraps
+if (window.ResizeObserver) { let rw = 0, rh = 0; new ResizeObserver(([e]) => {
+  const {width, height} = e.contentRect; if (width !== rw || height !== rh) { rw = width; rh = height; resize(); } }).observe($('wrap')); }
+buildPanel();
+drawKnob();
+$('wfon').checked = wfOn;
+$('wfmode').value = wfMode;
+resize();
+connect();
+</script>
+</body></html>

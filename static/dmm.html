@@ -1,0 +1,493 @@
+<!DOCTYPE html><html lang="ja"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title data-ja="GPIB デジタルマルチメータ">GPIB Digital Multimeter</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#111827;color:#e2e8f0;font-family:'Segoe UI',Arial,sans-serif;min-height:100vh;display:flex;flex-direction:column}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 14px;background:#1e2d45;border-bottom:1px solid #243b55}
+.toolbar h1{font-size:1em;color:#c4b5fd;margin-right:auto;letter-spacing:.05em}
+.toolbar h1 small{color:#94a3b8;font-weight:400;margin-left:8px;font-size:.8em}
+label{font-size:.8em;color:#94a3b8;display:flex;align-items:center;gap:5px}
+input[type=number],select{padding:5px 6px;background:#0f172a;border:1px solid #2d4a6a;border-radius:6px;color:#e2e8f0;font-size:.95em}
+#addr{width:52px;font-family:Consolas,monospace}
+button,.btn{padding:6px 12px;border-radius:6px;border:1px solid #2d4a6a;background:#0f172a;color:#e2e8f0;font-size:.85em;cursor:pointer;text-decoration:none;font-weight:600;user-select:none}
+button:hover,.btn:hover{filter:brightness(1.25)}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.4;cursor:default;filter:none}
+.status{font-size:.78em;padding:3px 10px;border-radius:12px;font-weight:700}
+.ok{background:#14532d;color:#4ade80}.off{background:#4c0519;color:#fb7185}.warn{background:#451a03;color:#fb923c}
+main{flex:1;display:grid;grid-template-columns:minmax(340px,1.2fr) minmax(300px,1fr);gap:12px;padding:12px;align-content:start}
+@media (max-width:860px){main{grid-template-columns:1fr}}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:#1a2438;border:1px solid #243b55;border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.card h2{font-size:.78em;color:#94a3b8;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
+.span2{grid-column:1/-1}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.hint{font-size:.75em;color:#64748b}
+/* display */
+.vfd{background:#06101e;border:1px solid #2d4a6a;border-radius:8px;padding:12px 16px 10px;display:flex;flex-direction:column;gap:6px}
+.vfd .top{display:flex;justify-content:space-between;font-size:.8em;color:#94a3b8;font-family:Consolas,monospace}
+.vfd .rd{display:flex;align-items:baseline;justify-content:flex-end;gap:12px}
+#rd{font-family:Consolas,'DejaVu Sans Mono',monospace;font-size:3.4em;font-weight:700;color:#a5f3fc;letter-spacing:.02em;line-height:1.1;white-space:nowrap}
+#ru{font-size:1.5em;color:#94a3b8;font-weight:600;min-width:2.6em}
+.vfd.ovl #rd{color:#f87171}
+.vfd.stale #rd{opacity:.4}
+.ann{display:flex;flex-wrap:wrap;gap:6px}
+.an{font-size:.72em;font-weight:700;padding:2px 8px;border-radius:5px;background:#0f172a;color:#475569;border:1px solid #243b55;letter-spacing:.05em}
+.an.on{background:#164e63;color:#67e8f9;border-color:#0891b2}
+.an.warn.on{background:#7f1d1d;color:#fecaca;border-color:#f87171}
+.runrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#btn-run.on{background:#166534;border-color:#4ade80}
+#btn-hold.on{background:#78350f;border-color:#fbbf24}
+/* keys */
+.keys{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.keys button{padding:10px 2px;font-size:.85em}
+.keys button.sel,.seg button.sel{background:#4c1d95;border-color:#a78bfa;color:#ede9fe}
+.seg{display:flex;flex-wrap:wrap;gap:5px}
+.seg button{flex:1;min-width:3.6em;padding:7px 4px;font-size:.82em;font-family:Consolas,monospace}
+.opt{display:grid;grid-template-columns:8.5em 1fr;gap:8px 10px;align-items:center}
+.opt .nm{font-size:.82em;color:#cbd5e1}
+.opt .nm small{display:block;color:#64748b;font-size:.85em}
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 12px}
+.stats div{display:flex;flex-direction:column}
+.stats span{font-size:.7em;color:#64748b;text-transform:uppercase;letter-spacing:.06em}
+.stats b{font-family:Consolas,monospace;color:#7dd3fc;font-weight:600;font-size:.95em}
+#trend{width:100%;height:240px;background:#06101e;border:1px solid #2d4a6a;border-radius:8px;display:block}
+#log{font-family:Consolas,monospace;font-size:.78em;color:#fca5a5;max-height:6em;overflow-y:auto;white-space:pre-wrap}
+#log:empty::before{content:'—';color:#475569}
+</style></head><body>
+<div class="toolbar">
+  <h1>&#x1F4DF; <span data-ja="デジタルマルチメータ">Digital Multimeter</span><small id="idn">—</small></h1>
+  <label data-help="GPIB address of the multimeter (0-30).&#10;34401A: set with I/O MENU > HP-IB ADDR on the front panel." data-help-ja="マルチメータの GPIB アドレス（0〜30）。&#10;34401A: 前面パネルの I/O MENU > HP-IB ADDR で設定します。">ADDR <input id="addr" type="number" min="0" max="30" value="{{ADDR}}"></label>
+  <span id="conn" class="status off" data-ja="未接続">Disconnected</span>
+  <button id="btn-local" data-help="Go To Local: return the meter to front-panel operation (stops the measurement first)." data-help-ja="Go To Local: 本体のフロントパネル操作に戻します（先に測定を停止します）。">Local</button>
+  <span id="lang-slot"></span>
+  <a href="/" class="btn" style="background:#374151;border-color:#4b5563" data-ja="&#x2190; メインメニュー">&#x2190; Main menu</a>
+</div>
+<main>
+ <div class="col">
+  <section class="card">
+    <h2 data-ja="測定値">Reading</h2>
+    <div class="vfd" id="vfd">
+      <div class="top"><span id="fname">—</span><span id="rinfo">—</span></div>
+      <div class="rd"><span id="rd">-.------</span><span id="ru"></span></div>
+      <div class="ann">
+        <span class="an" id="a-auto" data-help="Autorange" data-help-ja="オートレンジ">AUTO</span>
+        <span class="an" id="a-man" data-help="Manual range" data-help-ja="マニュアルレンジ">MAN</span>
+        <span class="an" id="a-null" data-help="Null (relative) measurement: CALC:FUNC NULL" data-help-ja="ヌル（相対）測定: CALC:FUNC NULL">NULL</span>
+        <span class="an" id="a-az" data-help="Autozero" data-help-ja="オートゼロ">AZ</span>
+        <span class="an" id="a-hiz" data-help="Input resistance >10 GΩ (100 mV-10 V dc ranges)" data-help-ja="入力抵抗 >10 GΩ（DC 100 mV〜10 V レンジ）">HI-Z</span>
+        <span class="an" id="a-rear" data-help="Front / rear input terminals (switch on the front panel)" data-help-ja="入力端子 前面 / 背面（前面パネルのスイッチ）">FRONT</span>
+        <span class="an warn" id="a-ovl" data-help="Overload (reading 9.9E+37)" data-help-ja="オーバーロード（読み値 9.9E+37）">OVLD</span>
+      </div>
+    </div>
+    <div class="runrow">
+      <button id="btn-run" data-help="Measure continuously (READ? repeated)." data-help-ja="連続測定（READ? を繰り返し）。">&#x25B6; <span data-ja="連続">Run</span></button>
+      <button id="btn-hold" data-help="Stop measuring (the meter stays in remote)." data-help-ja="測定を停止します（リモート状態のまま）。">&#x25A0; <span data-ja="ホールド">Hold</span></button>
+      <button id="btn-single" data-help="Take one reading." data-help-ja="1 回だけ測定します。">1&#xD7; <span data-ja="単発">Single</span></button>
+      <label data-help="Minimum time between readings. Fast = next reading right after the previous one.&#10;The integration time (NPLC) sets the real speed." data-help-ja="読み取りの最小間隔。最速 = 前の読み取りの直後に次を開始。&#10;実際の速度は積分時間（NPLC）で決まります。"><span data-ja="間隔">Interval</span>
+        <select id="rate"><option value="0" data-ja="最速">Fast</option><option value="500">0.5 s</option><option value="1000" selected>1 s</option><option value="2000">2 s</option><option value="5000">5 s</option><option value="10000">10 s</option></select></label>
+      <span class="hint" id="rps"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row"><h2 style="margin-right:auto" data-ja="統計（ブラウザ）">Statistics (browser)</h2>
+      <button id="btn-sreset" data-ja="リセット">Reset</button></div>
+    <div class="stats">
+      <div><span data-ja="平均">Mean</span><b id="s-mean">—</b></div>
+      <div><span data-ja="最小">Min</span><b id="s-min">—</b></div>
+      <div><span data-ja="最大">Max</span><b id="s-max">—</b></div>
+      <div><span data-ja="標準偏差">Std dev</span><b id="s-sd">—</b></div>
+      <div><span data-ja="ピーク間">Pk-pk</span><b id="s-pp">—</b></div>
+      <div><span data-ja="個数">Count</span><b id="s-n">0</b></div>
+    </div>
+  </section>
+ </div>
+
+ <div class="col">
+  <section class="card">
+    <h2 data-ja="測定機能">Function</h2>
+    <div class="keys" id="fkeys"></div>
+  </section>
+  <section class="card">
+    <h2 data-ja="レンジ">Range</h2>
+    <div class="seg" id="rkeys"></div>
+    <h2 id="resname" data-ja="分解能（積分時間）">Resolution</h2>
+    <div class="seg" id="reskeys"></div>
+    <div class="hint" id="reshint"></div>
+  </section>
+  <section class="card">
+    <h2 data-ja="オプション">Options</h2>
+    <div class="opt">
+      <div class="nm">Null<small>CALC:FUNC NULL</small></div>
+      <div class="row"><button id="btn-null" data-help="Null: the next reading becomes the offset, later readings are shown relative to it." data-help-ja="ヌル: 次の読み値をオフセットとして記憶し、以降はその差を表示します。">Null</button><span class="hint" id="nulloff"></span></div>
+      <div class="nm" data-ja="オートゼロ<small>ZERO:AUTO</small>">Autozero<small>ZERO:AUTO</small></div>
+      <div class="seg" id="azkeys"><button data-v="ON">ON</button><button data-v="OFF">OFF</button><button data-v="ONCE">ONCE</button></div>
+      <div class="nm" data-ja="入力抵抗<small>INP:IMP:AUTO</small>">Input Z<small>INP:IMP:AUTO</small></div>
+      <div class="seg" id="zkeys"><button data-v="OFF">10 MΩ</button><button data-v="ON">&gt;10 GΩ</button></div>
+      <div class="nm" data-ja="ブザー<small>SYST:BEEP:STAT</small>">Beeper<small>SYST:BEEP:STAT</small></div>
+      <div class="seg" id="bkeys"><button data-v="ON">ON</button><button data-v="OFF">OFF</button></div>
+      <div class="nm" data-ja="本体表示<small>DISP</small>">Display<small>DISP</small></div>
+      <div class="seg" id="dkeys"><button data-v="ON">ON</button><button data-v="OFF">OFF</button></div>
+    </div>
+    <div class="row">
+      <button id="btn-rst" data-help="*RST: DC V, autorange, 10 PLC, autozero on." data-help-ja="*RST: DC V、オートレンジ、10 PLC、オートゼロ ON。"><span data-ja="リセット (*RST)">Reset (*RST)</span></button>
+      <button id="btn-cls" data-help="*CLS: clear the status registers and the error queue." data-help-ja="*CLS: ステータスレジスタとエラーキューをクリアします。"><span data-ja="ステータス消去 (*CLS)">Clear status (*CLS)</span></button>
+    </div>
+    <div><div class="hint" data-ja="エラー（SYST:ERR?）">Errors (SYST:ERR?)</div><div id="log"></div></div>
+  </section>
+ </div>
+
+  <section class="card span2">
+    <div class="row"><h2 style="margin-right:auto" data-ja="トレンド">Trend</h2>
+      <label><span data-ja="表示範囲">Span</span> <select id="tspan"><option value="60">1 min</option><option value="300" selected>5 min</option><option value="1800">30 min</option><option value="0" data-ja="全部">All</option></select></label>
+      <button id="btn-csv" data-help="Download all readings as CSV (time, value, unit, function, range)." data-help-ja="すべての読み値を CSV でダウンロードします（時刻、値、単位、機能、レンジ）。">&#x1F4BE; CSV</button>
+      <button id="btn-tclr" data-ja="消去">Clear</button></div>
+    <canvas id="trend"></canvas>
+    <div class="hint" id="tinfo"></div>
+  </section>
+</main>
+<script>
+const TOKEN = '{{TOKEN}}';
+const $ = id => document.getElementById(id);
+let ws = null;   // sessionDead: declared by the session script (SESSION_JS)
+const TAB = Math.random().toString(36).slice(2, 7);
+let inflight = null, inflightAt = 0, reqNo = 0, timer = 0, lastRead = 0, reqCount = 0;
+let pendingCmds = [], wantSettings = true, wantIdn = true, needOnce = true;
+let mode = 'run', singleDue = false;    // run | hold
+const st = {};
+const hist = [];                         // {t, v, f, r}
+const HIST_MAX = 50000;
+let lastReadT = 0, rateEma = 0;
+
+// Functions (HP 34401A User's Guide, chapter 4). key = CONF? keyword.
+const F = {
+  dcv:  {n: ['DC V', 'DC V'],   conf: 'CONF:VOLT:DC', key: 'VOLT',    sens: 'VOLT:DC',   u: 'V',  rng: [0.1, 1, 10, 100, 1000], res: 'nplc'},
+  acv:  {n: ['AC V', 'AC V'],   conf: 'CONF:VOLT:AC', key: 'VOLT:AC', sens: 'VOLT:AC',   u: 'V',  rng: [0.1, 1, 10, 100, 750], res: 'band'},
+  dci:  {n: ['DC I', 'DC I'],   conf: 'CONF:CURR:DC', key: 'CURR',    sens: 'CURR:DC',   u: 'A',  rng: [0.01, 0.1, 1, 3], res: 'nplc'},
+  aci:  {n: ['AC I', 'AC I'],   conf: 'CONF:CURR:AC', key: 'CURR:AC', sens: 'CURR:AC',   u: 'A',  rng: [1, 3], res: 'band'},
+  res:  {n: ['Ω 2W', 'Ω 2線'],  conf: 'CONF:RES',     key: 'RES',     sens: 'RES',       u: 'Ω',  rng: [100, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8], res: 'nplc'},
+  fres: {n: ['Ω 4W', 'Ω 4線'],  conf: 'CONF:FRES',    key: 'FRES',    sens: 'FRES',      u: 'Ω',  rng: [100, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8], res: 'nplc'},
+  freq: {n: ['Freq', '周波数'], conf: 'CONF:FREQ',    key: 'FREQ',    sens: 'FREQ:VOLT', u: 'Hz', rng: [0.1, 1, 10, 100, 750], res: 'aper', aper: 'FREQ:APER'},
+  per:  {n: ['Period', '周期'], conf: 'CONF:PER',     key: 'PER',     sens: 'PER:VOLT',  u: 's',  rng: [0.1, 1, 10, 100, 750], res: 'aper', aper: 'PER:APER'},
+  cont: {n: ['Cont', '導通'],   conf: 'CONF:CONT',    key: 'CONT',    u: 'Ω'},
+  diod: {n: ['Diode', 'ダイオード'], conf: 'CONF:DIOD', key: 'DIOD',   u: 'V'},
+};
+const KEY2F = {}; for (const k in F) KEY2F[F[k].key] = k;
+let fn = null;           // current function id
+let conf = {range: NaN, res: NaN};
+
+try { const r = localStorage.getItem('dmmRate'); if (r !== null) $('rate').value = r; } catch (e) {}
+try { const m = localStorage.getItem('dmmMode'); if (m === 'hold') mode = 'hold'; } catch (e) {}
+
+// ── WebSocket ───────────────────────────────────────────────────────────────
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(proto + '//' + location.host + '/ws/inst');
+  ws.onopen = () => { inflight = null; wantIdn = wantSettings = needOnce = true; setConn('ws'); schedule(0); };
+  ws.onclose = () => { setConn(sessionDead ? 'dead' : 'close'); if (!sessionDead) setTimeout(connect, 2000); };
+  ws.onmessage = ev => { if (typeof ev.data === 'string') onText(JSON.parse(ev.data)); };
+}
+function setConn(s) {
+  const m = {ws: [tr('Connecting…', '接続中…'), 'warn'], ok: [tr('Connected', '接続'), 'ok'],
+             nr: [tr('No response', '応答なし'), 'off'], close: [tr('WS disconnected', 'WS 未接続'), 'off'],
+             dead: [tr('Session expired', 'セッション無効'), 'off']}[s];
+  $('conn').textContent = m[0]; $('conn').className = 'status ' + m[1];
+}
+function addr() { return Math.max(0, Math.min(30, parseInt($('addr').value, 10) || 0)); }
+
+function settingQs() {
+  const q = ['ZERO:AUTO?', 'INP:IMP:AUTO?', 'CALC:FUNC?', 'CALC:STAT?', 'CALC:NULL:OFFS?', 'SYST:BEEP:STAT?', 'ROUT:TERM?', 'DISP?'];
+  const f = F[fn];
+  if (f && f.sens) q.push(f.sens + ':RANG:AUTO?');
+  if (f && f.res === 'nplc') q.push(f.sens + ':NPLC?');
+  if (f && f.res === 'band') q.push('DET:BAND?');
+  if (f && f.res === 'aper') q.push(f.aper + '?');
+  return q;
+}
+// One request at a time: commands, settings, then the reading.
+function request() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  if (inflight && Date.now() - inflightAt < 15000) return;
+  const rate = +$('rate').value;
+  const doRead = singleDue || (mode === 'run' && Date.now() - lastRead >= rate - 20);
+  if (!(doRead || pendingCmds.length || needOnce)) return;
+  let qs = [];
+  if (wantIdn) qs.push('*IDN?');
+  qs.push('CONF?');
+  if (wantSettings || pendingCmds.length) qs = qs.concat(settingQs());
+  if (doRead) { qs.push('READ?', 'CONF?'); }    // CONF? after READ?: present range while autoranging
+  qs.push('SYST:ERR?');
+  qs = qs.filter((q, i) => q !== 'CONF?' || i === qs.lastIndexOf('CONF?'));
+  const items = pendingCmds.splice(0, 24 - qs.length).concat(qs);
+  if (doRead) { lastRead = Date.now(); singleDue = false; }
+  wantIdn = wantSettings = needOnce = false;
+  inflight = 'r' + (++reqNo) + TAB; inflightAt = Date.now(); reqCount++;
+  ws.send(JSON.stringify({cmd: 'req', dev: 'dmm', token: TOKEN, addr: addr(), id: inflight, q: items.join('|')}));
+}
+function schedule(ms) { clearTimeout(timer); timer = setTimeout(tick, ms); }
+function tick() {
+  request();
+  const rate = +$('rate').value;
+  schedule(inflight ? 100 : (mode === 'run' ? Math.max(20, rate - (Date.now() - lastRead)) : 300));
+}
+function cmd(...c) { pendingCmds.push(...c); wantSettings = true; if (!inflight) schedule(0); }
+
+function onText(m) {
+  if (m.type === 'auth') { sessionExpired(); if (ws) ws.close(); return; }
+  if (m.type === 'error') { if (m.dev && m.dev !== 'dmm') return; logErr(m.msg); if (inflight) { inflight = null; schedule(0); } return; }
+  if (m.type !== 'dmm' || m.addr !== addr()) return;
+  for (const k in m.vals) st[k] = String(m.vals[k]).trim();
+  if (m.err) { setConn('nr'); wantIdn = true; logErr(m.err); }
+  else setConn('ok');
+  if (m.id === inflight) { inflight = null; schedule(0); }
+  render(m.vals, !m.err);
+}
+
+// ── Formatting ──────────────────────────────────────────────────────────────
+const PFX = [[1e9, 'G'], [1e6, 'M'], [1e3, 'k'], [1, ''], [1e-3, 'm'], [1e-6, 'µ'], [1e-9, 'n']];
+function scaleFor(x) {           // largest prefix with x/scale >= 1 (x = range or |value|)
+  if (!(x > 0)) return [1, ''];
+  for (const p of PFX) if (x >= p[0] * 0.9999) return p;
+  return PFX[PFX.length - 1];
+}
+function sigDigits() {           // 4½ → 5, 5½ → 6, 6½ → 7 significant digits
+  const f = F[fn]; if (!f) return 7;
+  if (f.res === 'nplc') { const n = parseFloat(st[f.sens + ':NPLC?']); return n < 0.1 ? 5 : n < 5 ? 6 : 7; }
+  if (f.res === 'aper') { const a = parseFloat(st[f.aper + '?']); return a < 0.05 ? 5 : a < 0.5 ? 6 : 7; }
+  if (fn === 'cont' || fn === 'diod') return 6;
+  return 7;
+}
+// Display like the front panel: the range decides the prefix and decimals.
+function fmtReading(v) {
+  const f = F[fn] || {u: ''};
+  const byRange = f.rng && fn !== 'freq' && fn !== 'per' && conf.range > 0;
+  const ref = byRange ? conf.range : Math.abs(v);
+  const [sc, p] = scaleFor(ref);
+  const intd = Math.max(1, Math.floor(Math.log10(Math.max(ref / sc, 1) * 1.0001)) + 1);
+  const dec = Math.max(0, sigDigits() - intd);
+  return [(v / sc).toFixed(dec), p + f.u];
+}
+function fmtSI(v, digits) {
+  if (!isFinite(v)) return '—';
+  const [sc, p] = scaleFor(Math.abs(v) || 1);
+  return (v / sc).toPrecision(digits || 6) + ' ' + p + ((F[fn] || {}).u || '');
+}
+function fmtRange(r) { const [sc, p] = scaleFor(r); return +(r / sc).toPrecision(4) + ' ' + p + ((F[fn] || {}).u || ''); }
+
+let lastErrs = [];
+function logErr(s) {
+  if (!s) return;
+  lastErrs.push(new Date().toLocaleTimeString() + '  ' + s);
+  if (lastErrs.length > 30) lastErrs.shift();
+  $('log').textContent = lastErrs.join('\n'); $('log').scrollTop = 1e9;
+}
+
+// ── Rendering ───────────────────────────────────────────────────────────────
+function on(id, v) { $(id).classList.toggle('on', !!v); }
+function render(vals, ok) {
+  if ('*IDN?' in vals) {
+    const p = st['*IDN?'].split(',');
+    $('idn').textContent = p.length >= 2 ? p[0].trim() + ' ' + p[1].trim() + (p[3] ? '  fw ' + p[3].trim() : '') : st['*IDN?'];
+  }
+  if ('CONF?' in vals) {
+    const m = st['CONF?'].replace(/"/g, '').match(/^([A-Z:]+)(?:\s+([^,]+),(.+))?$/);
+    if (m) {
+      const nf = KEY2F[m[1]] || null;
+      if (nf !== fn) { fn = nf; wantSettings = true; buildKeys(); resetStats(); }
+      conf = {range: parseFloat(m[2]), res: parseFloat(m[3])};
+    }
+  }
+  if ('SYST:ERR?' in vals) { const e = st['SYST:ERR?']; if (e && !/^\+?0\s*,/.test(e)) logErr(e); }
+  const f = F[fn];
+  if ('READ?' in vals) {
+    const v = parseFloat(st['READ?']);
+    const now = Date.now();
+    if (lastReadT) { const r = 1000 / (now - lastReadT); rateEma = rateEma ? rateEma * 0.8 + r * 0.2 : r; }
+    lastReadT = now;
+    $('rps').textContent = mode === 'run' && rateEma ? rateEma.toFixed(rateEma < 1 ? 2 : 1) + tr(' rdg/s', ' 回/秒') : '';
+    if (ok && isFinite(v)) showReading(v);
+  }
+  // annunciators / settings
+  const auto = f && f.sens ? st[f.sens + ':RANG:AUTO?'] === '1' : false;
+  on('a-auto', f && f.sens && auto); on('a-man', f && f.sens && !auto);
+  const nul = st['CALC:STAT?'] === '1' && /NULL/.test(st['CALC:FUNC?'] || '');
+  on('a-null', nul); $('btn-null').classList.toggle('sel', nul);
+  $('nulloff').textContent = nul && isFinite(parseFloat(st['CALC:NULL:OFFS?'])) ? tr('Offset ', 'オフセット ') + fmtSI(parseFloat(st['CALC:NULL:OFFS?']), 7) : '';
+  const az = st['ZERO:AUTO?']; on('a-az', az === '1');
+  const hiz = st['INP:IMP:AUTO?'] === '1'; on('a-hiz', hiz && fn === 'dcv');
+  const term = st['ROUT:TERM?'] || ''; $('a-rear').textContent = /REAR/.test(term) ? 'REAR' : 'FRONT'; on('a-rear', !!term);
+  segSel('azkeys', az === '1' ? 'ON' : az === '0' ? 'OFF' : '');
+  segSel('zkeys', hiz ? 'ON' : 'OFF'); segSel('bkeys', st['SYST:BEEP:STAT?'] === '1' ? 'ON' : 'OFF'); segSel('dkeys', st['DISP?'] === '0' ? 'OFF' : 'ON');
+  $('fname').textContent = f ? tr(f.n[0], f.n[1]) : (st['CONF?'] || '—');
+  $('rinfo').textContent = f && f.sens && conf.range > 0 && fn !== 'freq' && fn !== 'per' ? tr('Range ', 'レンジ ') + fmtRange(conf.range) : (fn === 'freq' || fn === 'per' ? tr('Input ', '入力 ') + (auto ? 'AUTO' : '') : '');
+  // range / resolution keys
+  document.querySelectorAll('#rkeys button').forEach(b => b.classList.toggle('sel', b.dataset.v === 'AUTO' ? auto : (!auto && Math.abs(+b.dataset.v - conf.range) < conf.range * 1e-3)));
+  if (f && f.res) {
+    const rv = f.res === 'nplc' ? st[f.sens + ':NPLC?'] : f.res === 'band' ? st['DET:BAND?'] : st[f.aper + '?'];
+    document.querySelectorAll('#reskeys button').forEach(b => b.classList.toggle('sel', Math.abs(+b.dataset.v - parseFloat(rv)) < 1e-6 * Math.max(1, +b.dataset.v)));
+    if (f.res === 'nplc') { const n = parseFloat(rv); $('reshint').textContent = isFinite(n) ? tr('Integration ', '積分時間 ') + (n * 1000 / 50).toPrecision(3) + ' ms @50 Hz / ' + (n * 1000 / 60).toPrecision(3) + ' ms @60 Hz' : ''; }
+    else if (f.res === 'band') $('reshint').textContent = tr('AC filter: lowest input frequency (slow / medium / fast)', 'AC フィルタ: 入力周波数の下限（低速 / 中速 / 高速）');
+    else $('reshint').textContent = tr('Gate time', 'ゲート時間');
+  }
+}
+function segSel(id, v) { document.querySelectorAll('#' + id + ' button').forEach(b => b.classList.toggle('sel', b.dataset.v === v)); }
+function showReading(v) {
+  const ovl = Math.abs(v) >= 9.9e37;
+  $('vfd').classList.toggle('ovl', ovl); on('a-ovl', ovl && fn !== 'cont' && fn !== 'diod');
+  if (ovl) { $('rd').textContent = (fn === 'cont' || fn === 'diod') ? 'OPEN' : 'OVLD'; $('ru').textContent = ''; }
+  else { const [s, u] = fmtReading(v); $('rd').textContent = (v >= 0 ? '+' : '') + s; $('ru').textContent = u; }
+  hist.push({t: Date.now(), v: ovl ? NaN : v, f: fn, r: conf.range});
+  if (hist.length > HIST_MAX) hist.splice(0, hist.length - HIST_MAX);
+  if (!ovl) addStat(v);
+  drawTrend();
+}
+
+// ── Statistics (Welford) ────────────────────────────────────────────────────
+let sN = 0, sMean = 0, sM2 = 0, sMin = Infinity, sMax = -Infinity;
+function resetStats() { sN = 0; sMean = 0; sM2 = 0; sMin = Infinity; sMax = -Infinity; renderStats(); }
+function addStat(v) {
+  sN++; const d = v - sMean; sMean += d / sN; sM2 += d * (v - sMean);
+  sMin = Math.min(sMin, v); sMax = Math.max(sMax, v); renderStats();
+}
+function renderStats() {
+  const g = sigDigits();
+  $('s-n').textContent = sN;
+  $('s-mean').textContent = sN ? fmtSI(sMean, g) : '—';
+  $('s-min').textContent = sN ? fmtSI(sMin, g) : '—';
+  $('s-max').textContent = sN ? fmtSI(sMax, g) : '—';
+  $('s-sd').textContent = sN > 1 ? fmtSI(Math.sqrt(sM2 / (sN - 1)), 3) : '—';
+  $('s-pp').textContent = sN > 1 ? fmtSI(sMax - sMin, 3) : '—';
+}
+$('btn-sreset').onclick = resetStats;
+
+// ── Keys ────────────────────────────────────────────────────────────────────
+(function () {
+  const box = $('fkeys');
+  for (const k in F) {
+    const b = document.createElement('button'); b.dataset.f = k; b.textContent = tr(F[k].n[0], F[k].n[1]);
+    b.onclick = () => { if (k !== fn) { fn = k; buildKeys(); resetStats(); } cmd(F[k].conf); };
+    box.appendChild(b);
+  }
+})();
+function buildKeys() {
+  document.querySelectorAll('#fkeys button').forEach(b => b.classList.toggle('sel', b.dataset.f === fn));
+  const f = F[fn], rk = $('rkeys'), xk = $('reskeys');
+  rk.innerHTML = ''; xk.innerHTML = '';
+  if (!f || !f.rng) {
+    rk.innerHTML = '<span class="hint">' + tr('Fixed range (', '固定レンジ（') + (fn === 'cont' ? '1 kΩ' : '1 V') + tr(')', '）') + '</span>';
+  } else {
+    const add = (v, t) => { const b = document.createElement('button'); b.dataset.v = v; b.textContent = t; rk.appendChild(b); };
+    add('AUTO', 'AUTO');
+    for (const r of f.rng) add(r, fmtRange(r).replace(' ', ''));
+    rk.querySelectorAll('button').forEach(b => b.onclick = () => {
+      if (b.dataset.v === 'AUTO') cmd(f.sens + ':RANG:AUTO ON');
+      else cmd(f.sens + ':RANG ' + b.dataset.v);
+    });
+  }
+  let opts = [];
+  if (f && f.res === 'nplc') { $('resname').textContent = tr('Resolution (integration NPLC)', '分解能（積分時間 NPLC）'); opts = [['0.02', '0.02 (4½)'], ['0.2', '0.2 (5½)'], ['1', '1 (5½)'], ['10', '10 (6½)'], ['100', '100 (6½)']]; }
+  else if (f && f.res === 'band') { $('resname').textContent = tr('AC filter (DET:BAND)', 'AC フィルタ（DET:BAND）'); opts = [['3', '3 Hz'], ['20', '20 Hz'], ['200', '200 Hz']]; }
+  else if (f && f.res === 'aper') { $('resname').textContent = tr('Gate time (aperture)', 'ゲート時間（APER）'); opts = [['0.01', '10 ms (4½)'], ['0.1', '100 ms (5½)'], ['1', '1 s (6½)']]; }
+  else { $('resname').textContent = tr('Resolution', '分解能'); $('reshint').textContent = ''; }
+  for (const [v, t] of opts) {
+    const b = document.createElement('button'); b.dataset.v = v; b.textContent = t;
+    b.onclick = () => cmd(f.res === 'nplc' ? f.sens + ':NPLC ' + v : f.res === 'band' ? 'DET:BAND ' + v : f.aper + ' ' + v);
+    xk.appendChild(b);
+  }
+}
+$('btn-null').onclick = () => {
+  const nul = st['CALC:STAT?'] === '1' && /NULL/.test(st['CALC:FUNC?'] || '');
+  if (nul) cmd('CALC:STAT OFF'); else cmd('CALC:FUNC NULL', 'CALC:STAT ON');
+  resetStats();
+};
+document.querySelectorAll('#azkeys button').forEach(b => b.onclick = () => cmd('ZERO:AUTO ' + b.dataset.v));
+document.querySelectorAll('#zkeys button').forEach(b => b.onclick = () => cmd('INP:IMP:AUTO ' + b.dataset.v));
+document.querySelectorAll('#bkeys button').forEach(b => b.onclick = () => cmd('SYST:BEEP:STAT ' + b.dataset.v));
+document.querySelectorAll('#dkeys button').forEach(b => b.onclick = () => cmd('DISP ' + b.dataset.v));
+$('btn-rst').onclick = () => { if (confirm(tr('Reset the multimeter (*RST)?', 'マルチメータをリセット（*RST）しますか？'))) { cmd('*RST'); resetStats(); } };
+$('btn-cls').onclick = () => { cmd('*CLS'); lastErrs = []; $('log').textContent = ''; };
+function setMode(m) {
+  mode = m; try { localStorage.setItem('dmmMode', m); } catch (e) {}
+  $('btn-run').classList.toggle('on', m === 'run'); $('btn-hold').classList.toggle('on', m === 'hold');
+  $('vfd').classList.toggle('stale', m === 'hold'); rateEma = 0; lastReadT = 0; $('rps').textContent = '';
+  schedule(0);
+}
+$('btn-run').onclick = () => setMode('run');
+$('btn-hold').onclick = () => setMode('hold');
+$('btn-single').onclick = () => { if (mode === 'run') setMode('hold'); singleDue = true; $('vfd').classList.remove('stale'); schedule(0); };
+$('btn-local').onclick = () => { setMode('hold'); cmd('LOCAL'); };
+$('rate').onchange = () => { try { localStorage.setItem('dmmRate', $('rate').value); } catch (e) {} rateEma = 0; schedule(0); };
+$('addr').onchange = () => {
+  authFetch('/api/gpib_addr', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: 'dev=dmm&addr=' + encodeURIComponent($('addr').value)}).catch(function () {});
+  for (const k in st) delete st[k];
+  fn = null; buildKeys(); resetStats(); $('idn').textContent = '—';
+  wantIdn = wantSettings = needOnce = true; inflight = null; schedule(0);
+};
+
+// ── Trend chart ─────────────────────────────────────────────────────────────
+function drawTrend() {
+  const cv = $('trend'), dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  const L = 96, R = 14, T = 12, B = 24, pw = W - L - R, ph = H - T - B;
+  const span = +$('tspan').value * 1000;
+  const now = hist.length ? hist[hist.length - 1].t : Date.now();
+  const t0 = span ? now - span : (hist.length ? hist[0].t : now - 60000);
+  const pts = hist.filter(p => p.t >= t0 && p.f === fn);
+  g.font = '11px Segoe UI, Arial, sans-serif'; g.strokeStyle = '#1e293b'; g.lineWidth = 1;
+  for (let k = 0; k <= 5; k++) { const y = T + ph * k / 5; g.beginPath(); g.moveTo(L, y); g.lineTo(L + pw, y); g.stroke(); }
+  const tsp = Math.max(1000, now - t0);
+  g.fillStyle = '#64748b'; g.textAlign = 'center';
+  for (let k = 0; k <= 4; k++) {
+    const x = L + pw * k / 4; g.beginPath(); g.moveTo(x, T); g.lineTo(x, T + ph); g.stroke();
+    const sec = tsp * (1 - k / 4) / 1000;
+    g.fillText(k === 4 ? tr('now', '現在') : '-' + (sec >= 60 ? (sec / 60).toFixed(sec % 60 ? 1 : 0) + ' min' : sec.toFixed(0) + ' s'), x, H - 7);
+  }
+  $('tinfo').textContent = hist.length ? tr('Readings: ', '読み値: ') + hist.length + (hist.length >= HIST_MAX ? tr(' (oldest dropped)', '（古いものから削除）') : '') : '';
+  const vs = pts.map(p => p.v).filter(isFinite);
+  if (!vs.length) return;
+  let lo = Math.min(...vs), hi = Math.max(...vs);
+  if (!(hi > lo)) { const c = lo, d = Math.abs(c) * 1e-6 || 1e-9; lo = c - d; hi = c + d; }
+  const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+  const X = t => L + pw * (t - (now - tsp)) / tsp, Y = v => T + ph * (1 - (v - lo) / (hi - lo));
+  if (sN > 1) {   // mean line
+    g.strokeStyle = 'rgba(167,139,250,.6)'; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(L, Y(sMean)); g.lineTo(L + pw, Y(sMean)); g.stroke(); g.setLineDash([]);
+  }
+  g.strokeStyle = '#67e8f9'; g.lineWidth = 1.6; g.beginPath();
+  let pen = false;
+  for (const p of pts) { if (!isFinite(p.v)) { pen = false; continue; } if (pen) g.lineTo(X(p.t), Y(p.v)); else { g.moveTo(X(p.t), Y(p.v)); pen = true; } }
+  g.stroke();
+  if (pts.length < 60) { g.fillStyle = '#67e8f9'; for (const p of pts) if (isFinite(p.v)) { g.beginPath(); g.arc(X(p.t), Y(p.v), 2, 0, 7); g.fill(); } }
+  g.textAlign = 'right'; g.fillStyle = '#67e8f9';
+  // enough digits to tell the grid lines apart
+  const lab = Math.min(10, Math.max(4, Math.ceil(Math.log10(Math.max(Math.abs(hi), Math.abs(lo)) / ((hi - lo) / 5))) + 2));
+  for (let k = 0; k <= 5; k++) g.fillText(fmtSI(hi - (hi - lo) * k / 5, lab), L - 5, T + ph * k / 5 + 4);
+}
+$('tspan').onchange = drawTrend;
+$('btn-tclr').onclick = () => { hist.length = 0; drawTrend(); };
+window.addEventListener('resize', drawTrend);
+function isoLocal(t) {
+  const d = new Date(t), p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+}
+$('btn-csv').onclick = () => {
+  if (!hist.length) { logErr(tr('No readings yet', 'まだ読み値がありません')); return; }
+  const lines = ['# ' + ($('idn').textContent || 'multimeter') + ' GPIB ' + addr(), 'time,elapsed_s,value,unit,function,range'];
+  const t0 = hist[0].t;
+  for (const p of hist) {
+    const f = F[p.f] || {u: '', n: ['', '']};
+    lines.push([isoLocal(p.t), ((p.t - t0) / 1000).toFixed(3), isFinite(p.v) ? p.v : 'OVLD', f.u, f.n[0], isFinite(p.r) ? p.r : ''].join(','));
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\n') + '\n'], {type: 'text/csv'}));
+  a.download = 'dmm_' + isoLocal(Date.now()).replace(/[-:]/g, '').replace('T', '_').slice(0, 15) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+buildKeys(); setMode(mode); drawTrend();
+connect();
+</script>
+</body></html>

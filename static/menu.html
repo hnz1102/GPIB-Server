@@ -1,0 +1,101 @@
+<!DOCTYPE html><html lang="ja"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title data-ja="GPIB-Server メインメニュー">GPIB-Server Main Menu</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#111827;color:#e2e8f0;min-height:100vh}
+.page{max-width:860px;margin:0 auto;padding:16px}
+header{display:flex;align-items:center;gap:12px;padding:14px 0 18px;flex-wrap:wrap}
+header h1{color:#f87171;font-size:1.4em;letter-spacing:.05em;margin-right:auto}
+header h1 small{font-size:.55em;color:#94a3b8;font-weight:400;margin-left:6px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.tiles.sys{grid-template-columns:repeat(2,1fr)}
+@media (max-width:760px){.tiles,.tiles.sys{grid-template-columns:1fr}}
+.grp{font-size:.75em;color:#64748b;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:18px 2px 8px}
+.grp:first-of-type{margin-top:0}
+.tile{display:flex;flex-direction:column;gap:8px;padding:18px 20px;border-radius:12px;background:#1e2d45;border:1px solid #243b55;
+  color:inherit;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.35);transition:transform .12s,border-color .12s,filter .12s;min-height:150px}
+.tile:hover{transform:translateY(-2px);filter:brightness(1.12)}
+.tile .ic{font-size:2em;line-height:1}
+.tile .tt{font-size:1.1em;font-weight:700}
+.tile .ds{font-size:.82em;color:#94a3b8;line-height:1.5}
+.tile .st{margin-top:auto;font-size:.8em;color:#7dd3fc;font-family:Consolas,monospace;min-height:1.2em}
+.t-status{border-left:5px solid #38bdf8}.t-status:hover{border-color:#38bdf8}
+.t-spec{border-left:5px solid #14b8a6}.t-spec:hover{border-color:#14b8a6}
+.t-psu{border-left:5px solid #f59e0b}.t-psu:hover{border-color:#f59e0b}
+.t-cfg{border-left:5px solid #94a3b8}.t-cfg:hover{border-color:#94a3b8}
+.t-dmm{border-left:5px solid #a78bfa}.t-dmm:hover{border-color:#a78bfa}
+.sub{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.sub a{flex:1;min-width:160px;padding:12px;border-radius:8px;text-align:center;text-decoration:none;font-weight:700;font-size:.9em;color:#e2e8f0;border:1px solid #2d4a6a}
+.sub a:hover{filter:brightness(1.2)}
+.b-term{background:#4c1d95}.b-out{background:#374151}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;background:#475569}
+.dot.on{background:#4ade80}
+</style></head><body>
+<div class="page">
+<header>
+  <h1>&#x1F50C; GPIB-Server <small>v{{VERSION}}</small></h1>
+  <span id="lang-slot"></span>
+</header>
+<div class="grp" data-ja="計測器">Instruments</div>
+<div class="tiles">
+  <a class="tile t-spec" href="/spectrum">
+    <div class="ic">&#x1F4C8;</div>
+    <div class="tt" data-ja="スペクトラムアナライザ">Spectrum Analyzer</div>
+    <div class="ds" data-ja="ADVANTEST R3267 — リアルタイム波形表示とフロントパネル操作">ADVANTEST R3267 — real-time trace and front-panel controls</div>
+    <div class="st" id="s-spec"></div>
+  </a>
+  <a class="tile t-psu" href="/psu">
+    <div class="ic">&#x1F50B;</div>
+    <div class="tt" data-ja="直流電源">DC Power Supply</div>
+    <div class="ds" data-ja="HP 6612B — 出力オン/オフ、電圧・電流設定、保護、トレンド">HP 6612B — output on/off, voltage / current, protection, trend</div>
+    <div class="st" id="s-psu"></div>
+  </a>
+  <a class="tile t-dmm" href="/dmm">
+    <div class="ic">&#x1F4DF;</div>
+    <div class="tt" data-ja="デジタルマルチメータ">Digital Multimeter</div>
+    <div class="ds" data-ja="HP 34401A — DC/AC 電圧・電流、抵抗、周波数、統計、トレンド">HP 34401A — DC/AC V &amp; I, resistance, frequency, statistics, trend</div>
+    <div class="st" id="s-dmm"></div>
+  </a>
+</div>
+<div class="grp" data-ja="システム">System</div>
+<div class="tiles sys">
+  <a class="tile t-status" href="/status">
+    <div class="ic">&#x1F4F6;</div>
+    <div class="tt" data-ja="ステータス">Status</div>
+    <div class="ds" data-ja="IP / Wi-Fi / チップ温度 / GPIB / SSH 接続数 / 起動履歴">IP / Wi-Fi / chip temperature / GPIB / SSH sessions / boot log</div>
+    <div class="st" id="s-status"></div>
+  </a>
+  <a class="tile t-cfg" href="/config">
+    <div class="ic">&#x2699;&#xFE0F;</div>
+    <div class="tt" data-ja="コンフィグ設定">Configuration</div>
+    <div class="ds" data-ja="Wi-Fi / ネットワーク / Syslog / 認証 / NTP、保存・既定値・再起動">Wi-Fi / network / Syslog / authentication / NTP; save, defaults, reboot</div>
+  </a>
+</div>
+<div class="sub">
+  <a class="b-term" href="/terminal" data-help="GPIB terminal in the browser (Prologix-compatible ++ commands)." data-help-ja="ブラウザ上の GPIB ターミナル（Prologix 互換の ++ コマンド）。"><span data-ja="&#x1F4BB; GPIB ターミナル">&#x1F4BB; GPIB Terminal</span></a>
+  <a class="b-out" href="/logout"><span data-ja="&#x1F6AA; ログアウト">&#x1F6AA; Logout</span></a>
+</div>
+</div>
+<script>
+(function () {
+  document.getElementById('s-psu').textContent = 'GPIB {{PSU_ADDR}}';
+  document.getElementById('s-dmm').textContent = 'GPIB {{DMM_ADDR}}';
+  function up(s) {
+    var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+    return (h ? h + 'h ' : '') + m + 'm';
+  }
+  function update() {
+    authFetch('/api/status').then(function (r) { return r.json(); }).then(function (d) {
+      document.getElementById('s-status').textContent =
+        d.ip + '  ' + d.chip_temp.toFixed(1) + ' °C  ' + tr('up ', '稼働 ') + up(d.uptime_s);
+      var s = document.getElementById('s-spec');
+      s.innerHTML = 'GPIB {{SA_ADDR}} &nbsp;<span class="dot' + (d.spectrum_running ? ' on' : '') + '"></span>' +
+        (d.spectrum_running ? tr('Capturing', '取り込み中') : tr('Stopped', '停止中'));
+    }).catch(function () {});
+  }
+  update();
+  setInterval(update, 5000);
+})();
+</script>
+</body></html>

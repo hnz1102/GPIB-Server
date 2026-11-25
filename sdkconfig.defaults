@@ -1,0 +1,45 @@
+# Console / logs on the USB-C port (USB-Serial-JTAG, GPIO19/20).
+# The GPIB-Server board does not route UART0 (GPIO43/44) to a connector.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=32696
+CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT=20000
+CONFIG_LWIP_SNTP_MAX_SERVERS=4
+CONFIG_ESP32_SPIRAM_SUPPORT=y
+CONFIG_SOC_PSRAM_DMA_CAPABLE=y
+CONFIG_SPIRAM_SUPPORT=y
+CONFIG_ESP32S3_SPIRAM_SUPPORT=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_ESP_TASK_WDT_EN=y
+# Keep automatic startup init OFF (do not watch idle tasks by default) — the
+# task_wdt component is only compiled in so that /api/reboot's handler can
+# manually esp_task_wdt_init()/esp_task_wdt_add() as a safety net right
+# before esp_restart(), forcing a real hardware reset if esp_restart()'s
+# internal shutdown-handler sequence ever hangs. See httpserver.rs.
+CONFIG_ESP_TASK_WDT_INIT=n
+CONFIG_HTTPD_MAX_URI_LEN=1024
+CONFIG_HTTPD_WS_SUPPORT=y
+CONFIG_SPIRAM_USE=y
+CONFIG_SPIRAM_MEMTEST=n
+CONFIG_MBEDTLS_SSL_MAX_CONTENT_LEN=32696
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=n
+CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY=y
+#CONFIG_LOG_DEFAULT_LEVEL_DEBUG=y
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+# NOTE: esp-idf-sys builds from a synthetic out-of-tree CMake project, so
+# CONFIG_PARTITION_TABLE_CUSTOM_FILENAME is NOT resolved relative to this
+# repo — it must be an absolute path. setup_components.sh rewrites this
+# automatically to match the actual checkout location; run it after moving
+# or cloning the repo elsewhere.
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="/home/nodeadmin/esp32/esp32-s3/GPIB-remote/partitions.csv"
+
+# OTA firmware update support (see components/ssh_bridge "update" command).
+# Two OTA app slots (ota_0/ota_1) + otadata, defined in partitions.csv.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# partitions.csv spans the full 8MB flash (matches espflash.toml).
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="8MB"
+CONFIG_LWIP_MAX_SOCKETS=16

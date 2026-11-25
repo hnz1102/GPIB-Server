@@ -1,0 +1,31 @@
+[gpib-server]
+wps_enable     = "true"     # "true": use WPS PBC on next boot when SSID is empty
+wifi_ssid      = ""         # your-ssid
+wifi_psk       = ""         # your-password
+ip_mode        = "dhcp"           # "dhcp" or "static"
+ip_address     = "192.168.0.200"
+subnet_mask    = "255.255.255.0"
+gateway        = "192.168.0.1"
+dns            = "1.1.1.1"
+
+syslog_server    = "192.168.0.140:514"
+syslog_enable    = "false"
+syslog_host_name = "gpib-server"
+syslog_app_name  = "gpib-server"
+
+ssh_user     = "admin"
+ssh_password = "change-me"
+
+ntp_server1 = "time.aws.com"
+ntp_server2 = "time.google.com"
+ntp_server3 = "time.cloudflare.com"
+ntp_server4 = "ntp.nict.jp"
+
+mini_display_enable = "true"
+
+# GPIB addresses (0-30). Defaults only: values changed on /config or on the
+# instrument pages are saved to NVS and override these.
+gpib_addr = "1"      # terminal / SSH (++addr) address at power-up
+sa_addr   = "30"     # ADVANTEST R3267 spectrum analyzer (/spectrum)
+psu_addr  = "2"      # HP 6612B DC power supply (/psu)
+dmm_addr  = "22"     # HP 34401A multimeter (/dmm)

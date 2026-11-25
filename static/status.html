@@ -1,0 +1,112 @@
+<!DOCTYPE html><html lang="ja"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title data-ja="GPIB-Server ステータス">GPIB-Server Status</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#111827;color:#e2e8f0;min-height:100vh}
+.page{max-width:780px;margin:0 auto;padding:16px}
+header{display:flex;align-items:center;gap:12px;padding:14px 0 16px;flex-wrap:wrap}
+header h1{color:#38bdf8;font-size:1.35em;letter-spacing:.05em;margin-right:auto}
+header h1 small{font-size:.55em;color:#94a3b8;font-weight:400;margin-left:6px}
+.back{padding:8px 14px;border-radius:7px;background:#374151;color:#e2e8f0;text-decoration:none;font-weight:700;font-size:.88em;border:1px solid #4b5563}
+.back:hover{filter:brightness(1.2)}
+.card{background:#1e2d45;border-radius:10px;padding:16px 18px;margin-bottom:12px;border:1px solid #243b55;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.section-title{display:flex;align-items:center;gap:8px;color:#93c5fd;font-size:.82em;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin:0 0 12px;padding-bottom:6px;border-bottom:1px solid #1e3a5f}
+.stat-grid{display:grid;grid-template-columns:auto 1fr;gap:7px 18px;align-items:center}
+.stat-key{font-size:.78em;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.stat-val{font-size:.9em;color:#7dd3fc;font-weight:600}
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:.8em;font-weight:700}
+.badge-ok{background:#14532d;color:#4ade80;border:1px solid #166534}
+.badge-warn{background:#451a03;color:#fb923c;border:1px solid #7c2d12}
+.badge-err{background:#4c0519;color:#fb7185;border:1px solid #881337}
+.badge-off{background:#1f2937;color:#94a3b8;border:1px solid #374151}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;color:#475569;font-size:.75em;padding-bottom:6px;border-bottom:1px solid #243b55}
+td{padding:5px 0;font-size:.88em}
+td.n{color:#64748b;width:3em}
+.muted{color:#64748b;font-size:.88em}
+.diag{font-family:Consolas,monospace;font-size:.8em;color:#cbd5e1;white-space:pre-wrap}
+</style></head><body>
+<div class="page">
+<header>
+  <h1>&#x1F4F6; <span data-ja="ステータス">Status</span> <small>v{{VERSION}}</small></h1>
+  <span id="lang-slot"></span>
+  <a href="/" class="back" data-ja="&#x2190; メインメニュー">&#x2190; Main menu</a>
+</header>
+
+<div class="card">
+  <div class="section-title">&#x1F4E1; <span data-ja="デバイス状態">Device Status</span><span style="margin-left:auto;font-weight:400;text-transform:none;color:#475569" data-ja="3 秒ごとに更新">updated every 3 s</span></div>
+  <div id="status-card" class="stat-grid"><span class="stat-key" data-ja="読み込み中">Loading</span><span class="stat-val">...</span></div>
+</div>
+
+<div class="card">
+  <div class="section-title">&#x1F4DC; <span data-ja="起動履歴">Boot Log</span></div>
+  <div id="boot-log"><span class="muted" data-ja="読み込み中...">Loading...</span></div>
+</div>
+
+<div class="card" id="diag-card" style="display:none">
+  <div class="section-title">&#x1F527; <span data-ja="診断ログ">Diagnostic Log</span></div>
+  <div id="diag" class="diag"></div>
+</div>
+</div>
+<script>
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); }
+function row(k, v) { return '<span class="stat-key">' + k + '</span><span class="stat-val">' + v + '</span>'; }
+function badge(cls, t) { return '<span class="badge ' + cls + '">' + t + '</span>'; }
+function rssiBar(rssi) {
+  if (rssi >= -55) return badge('badge-ok', tr('Excellent', '非常に良好') + ' (' + rssi + ' dBm)');
+  if (rssi >= -70) return badge('badge-ok', tr('Good', '良好') + ' (' + rssi + ' dBm)');
+  if (rssi >= -80) return badge('badge-warn', tr('Fair', '普通') + ' (' + rssi + ' dBm)');
+  return badge('badge-err', tr('Weak', '弱い') + ' (' + rssi + ' dBm)');
+}
+function uptime(s) {
+  var d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return (d ? d + tr(' d ', ' 日 ') : '') + (d || h ? h + tr(' h ', ' 時間 ') : '') + m + tr(' min', ' 分');
+}
+function updateStatus() {
+  authFetch('/api/status').then(function (r) { return r.json(); }).then(function (d) {
+    document.getElementById('status-card').innerHTML =
+      row(tr('IP Address', 'IP アドレス'), esc(d.ip)) +
+      row('WiFi SSID', esc(d.ssid)) +
+      row(tr('RSSI', '電波強度'), rssiBar(d.rssi)) +
+      row(tr('Chip Temp', 'チップ温度'), badge(d.chip_temp < 70 ? 'badge-ok' : d.chip_temp < 85 ? 'badge-warn' : 'badge-err', d.chip_temp.toFixed(1) + ' °C')) +
+      row(tr('Uptime', '稼働時間'), uptime(d.uptime_s)) +
+      row(tr('GPIB Address', 'GPIB アドレス'), badge('badge-ok', d.gpib_addr) + ' <span class="muted">' + tr('(terminal / SSH, ++addr)', '（ターミナル / SSH の ++addr）') + '</span>') +
+      row('GPIB SRQ', d.gpib_srq ? badge('badge-warn', tr('Asserted', '要求あり')) : badge('badge-ok', tr('Idle', 'なし'))) +
+      row(tr('Spectrum capture', 'スペクトラム取り込み'), d.spectrum_running ? badge('badge-ok', tr('Running', '実行中')) : badge('badge-off', tr('Stopped', '停止中'))) +
+      row(tr('SSH Sessions', 'SSH 接続数'), badge('badge-ok', d.ssh_sessions)) +
+      row(tr('Version', 'バージョン'), badge('badge-ok', 'v' + esc(d.version)));
+  }).catch(function () {});
+}
+var REASONS = {
+  'PowerOn': ['badge-ok', '&#x1F50C; PowerOn'], 'Software': ['badge-ok', '&#x1F501; Software'],
+  'Panic/Crash': ['badge-err', '&#x1F4A5; Panic/Crash'], 'IntWatchdog': ['badge-err', '&#x231B; IntWatchdog'],
+  'TaskWatchdog': ['badge-warn', '&#x231B; TaskWatchdog'], 'Watchdog': ['badge-warn', '&#x231B; Watchdog'],
+  'Brownout': ['badge-err', '&#x26A1; Brownout'], 'DeepSleep': ['badge-ok', '&#x1F4A4; DeepSleep'],
+  'ExtReset': ['badge-ok', '&#x1F504; ExtReset'], 'SDIO': ['badge-warn', '&#x1F4BE; SDIO']
+};
+function loadBootLog() {
+  var el = document.getElementById('boot-log');
+  authFetch('/api/boot_log').then(function (r) { return r.json(); }).then(function (d) {
+    if (!d.entries || !d.entries.length) { el.innerHTML = '<span class="muted">' + tr('No entries yet.', '記録はまだありません。') + '</span>'; return; }
+    var h = '<table><tr><th>#</th><th>' + tr('Reset Reason', 'リセット要因') + '</th></tr>';
+    d.entries.forEach(function (e) {
+      var m = e.match(/^#(\d+)\s+(.+)$/);
+      if (!m) return;
+      var info = REASONS[m[2].trim()] || ['badge-warn', esc(m[2].trim())];
+      h += '<tr><td class="n">' + m[1] + '</td><td>' + badge(info[0], info[1]) + '</td></tr>';
+    });
+    el.innerHTML = h + '</table>';
+  }).catch(function (e) { el.innerHTML = '<span style="color:#fca5a5">' + tr('Failed to load: ', '読み込みに失敗しました: ') + esc(e) + '</span>'; });
+}
+function loadDiag() {
+  authFetch('/api/diag_log').then(function (r) { return r.json(); }).then(function (d) {
+    if (!d.entries || !d.entries.length) return;
+    document.getElementById('diag').textContent = d.entries.join('\n');
+    document.getElementById('diag-card').style.display = '';
+  }).catch(function () {});
+}
+updateStatus(); setInterval(updateStatus, 3000);
+loadBootLog(); loadDiag();
+</script>
+</body></html>
