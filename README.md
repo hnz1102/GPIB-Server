@@ -576,9 +576,9 @@ Soft-key states (ON/OFF, selections, values such as Min ATT) are read with
 read-only panel queries when a menu opens, after each key, and every 4 s.
 Measurement results are polled every 1.5 s while their mode is on, and shown in
 the **RESULT** box. Examples: OBW / Fc, channel / total / average power, ACP,
-counter, noise/Hz, %AM, harmonics, C/N, phase jitter, IM, pass/fail, peak list,
+counter, noise/Hz, %AM, harmonics, C/N, phase jitter, IM, pass/fail,
 XY cursor Δ.
-List results (peak list, ACP, harmonics, C/N, IM) are shown as tables. Each
+List results (ACP, harmonics, C/N, IM) are shown as tables. Each
 column has one unit, given in its header, and fixed decimals, so the digits line up.
 The `#` column matches the numbered markers on the graph.
 With W / V units the graph switches to a linear scale (0 … reference level). In
@@ -592,9 +592,30 @@ confirmation.
 
 The graph shows trace A (green), trace B (magenta, when it is not Blank), the
 display line (FORMAT, orange), the instrument marker and the peak.
-With **MKR → Peak List Freq / Peak List Level** the peaks of the list (`PKLST?`, read
-every 3 s) are shown as numbered yellow markers, in the instrument's order:
-frequency order or level order. The R3267 has no query for the peak-list state,
+**Peak list.** The **PEAK LIST** box (below REPEAT / SINGLE) finds the peaks in the
+browser, in every captured frame, so the list follows the signal at the frame rate
+without extra GPIB traffic. **Level** lists the largest peaks first, **Freq** in
+frequency order; **Off** turns it off. Settings (kept in the browser):
+
+| Setting | Meaning |
+|---------|---------|
+| Trace | Trace A, trace B or the browser max hold |
+| Excursion | A peak must rise at least this much (dB) above the lowest point on each side before a higher point (its prominence). Default 6 dB |
+| Threshold | Peaks below this level are ignored. Empty = auto: noise floor (median of the trace) + 10 dB |
+| Max | Number of peaks listed (1–50, default 10) |
+| Labels | Frequency / level label next to each marker |
+
+The table shows each peak's frequency (time in zero span), level, difference to
+the largest peak and Δf. The table always has Max rows (blank rows pad a short list; over 10
+rows it scrolls), so its height does not change and the keys below stay in place. The peaks are drawn as numbered yellow ▼ markers; labels
+that would overlap are left out. Hovering a row highlights its marker with a guide
+line; clicking a row moves the instrument marker to that peak (`MK`). The level is
+the trace point (no interpolation), as on the instrument display.
+
+The instrument's own peak list (**MKR → Peak List Freq / Level**, `PLS`, `PKLST?`)
+is still available. Its markers are shown when the browser list is Off. The R3267
+searches only once, when `PLS` is sent, and does not re-sort the list afterwards.
+The peak list is also written to the CSV header. The R3267 has no query for the peak-list state,
 and `PKLST?` keeps returning the last list after `PLS OFF`. So the page tracks the
 state itself: Peak List Freq / Level turns it on, and Peak List OFF, Marker OFF,
 PRESET and RCL turn it off. If the peak list is switched on or off on the instrument's

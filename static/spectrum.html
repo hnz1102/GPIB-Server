@@ -73,6 +73,29 @@ button:active{transform:translateY(1px)}
 .pad .unit{background:#3b2a63;border-color:#7c3aed;font-size:.82em}
 .pad .unit:disabled{opacity:.3;cursor:default;filter:none}
 .pad .step{background:#24324a}
+/* peak list panel */
+#pkl{background:#0b1220;border:1px solid #2d4a6a;border-radius:8px;padding:8px 10px;font-size:.8em}
+#pkl .phdr{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+#pkl .phdr .sec{margin:0 auto 0 0}
+#pkl .phdr button{padding:4px 9px;font-size:.92em;background:#1f2a3f}
+#pkl .phdr button.sel{background:#a16207;border-color:#fde047;color:#fef9c3}
+#pkl .phdr select{padding:3px 4px;background:#0f172a;border:1px solid #2d4a6a;border-radius:6px;color:#e2e8f0;font-size:.95em}
+#pkl .phdr label{display:flex;align-items:center;gap:3px;color:#94a3b8;white-space:nowrap}
+#pl-thu{display:inline-block;min-width:8.5em}
+#pkl .phdr input[type=number]{padding:3px 4px;background:#0f172a;border:1px solid #2d4a6a;border-radius:6px;color:#e2e8f0;font-size:.95em}
+#pkl table{width:100%;table-layout:fixed;border-collapse:collapse;font-family:Consolas,monospace;font-variant-numeric:tabular-nums}
+#pkl th{color:#94a3b8;font-weight:600;font-family:'Segoe UI',Arial,sans-serif;font-size:.92em;text-align:right;padding:2px 6px;border-bottom:1px solid #2d4a6a;white-space:nowrap}
+#pkl td{color:#7dd3fc;text-align:right;padding:2px 6px;white-space:nowrap}
+#pkl td:first-child,#pkl th:first-child{color:#fde047;text-align:center;width:2.2em}
+#pkl tbody tr{cursor:pointer;height:20px}
+#pkl tbody tr.pad{cursor:default}
+#pkl tbody tr.pad:hover td{background:inherit}
+#pkl .pscroll{overflow-y:auto}
+#pkl thead th{position:sticky;top:0;background:#0b1220}
+#pkl td{line-height:16px}
+#pkl tbody tr:nth-child(even) td{background:rgba(30,45,69,.45)}
+#pkl tbody tr:hover td,#pkl tbody tr.hl td{background:#3f3a12}
+#pkl .pnote{color:#64748b;margin-top:4px}
 @media (max-width:1100px){#panel{width:480px}}
 @media (max-width:900px){#main{flex-direction:column}#panel{width:auto;border-left:none;border-top:1px solid #243b55}#wrap{min-height:320px}}
 @media (max-width:520px){.fkrow{flex-direction:column}.fkcol,.padcol{width:100%}}
@@ -118,6 +141,7 @@ button:active{transform:translateY(1px)}
       <button id="hk-repeat" data-help="REPEAT (continuous sweep).&#10;Sets the R3267 to continuous sweep (CONTS) and captures continuously." data-help-ja="REPEAT（連続掃引）。&#10;R3267 を連続掃引（CONTS）にし、ブラウザへの取り込みも連続で行います。">REPEAT</button>
       <button id="hk-single" data-help="SINGLE (single sweep).&#10;Each press takes and captures one sweep, then holds the display (SNGLS)." data-help-ja="SINGLE（単掃引）。&#10;押すたびに 1 回だけ掃引して取り込み、表示を保持します（SNGLS）。">SINGLE</button>
     </div>
+    <div id="pkl" data-help="Peak list (R3267 PLS FREQ / LEVEL).&#10;Level: largest peak first; Freq: lowest frequency first.&#10;The R3267 searches once when the list is made; Auto re-search repeats PLS so the list follows the signal.&#10;Hover a row to highlight its marker, click it to move the instrument marker there." data-help-ja="ピークリスト（R3267 の PLS FREQ / LEVEL）。&#10;レベル順: 最大ピークから、周波数順: 低い周波数から。&#10;R3267 はリスト作成時に 1 回だけサーチします。自動再サーチで PLS を繰り返すと信号に追従します。&#10;行にマウスを乗せるとマーカを強調、クリックで本体のマーカをそこへ移動します。"></div>
     <div class="fkrow">
       <div class="fkcol">
         <div class="sec" data-ja="ファンクション">FUNCTION</div>
@@ -471,8 +495,7 @@ const MENU_RES = {
               {q: 'CSRDY?', lbl: ['XY cursor ΔY', 'XY カーソル ΔY'], f: ['db'], on: ON1('XYCSR?')}],
   FORMAT: [{q: 'PFJ?', lbl: ['Pass/Fail', 'Pass/Fail 判定'], f: ['pf'], on: ON1('PFC?')}],
   MKR:    [{q: 'MF?', lbl: ['Marker freq', 'マーカ周波数'], f: ['freq'], on: () => meta && meta.mkr},
-           {q: 'ML?', lbl: ['Marker level', 'マーカレベル'], f: ['level'], on: () => meta && meta.mkr},
-           {q: 'PKLST?', lbl: ['Peak list', 'ピークリスト'], f: ['list', 'freq', 'level'], cols: [['Frequency', '周波数'], ['Level', 'レベル']]}],
+           {q: 'ML?', lbl: ['Marker level', 'マーカレベル'], f: ['level'], on: () => meta && meta.mkr}],
   SRCH:   [{q: 'MF?', lbl: ['Marker freq', 'マーカ周波数'], f: ['freq'], on: () => meta && meta.mkr},
            {q: 'ML?', lbl: ['Marker level', 'マーカレベル'], f: ['level'], on: () => meta && meta.mkr}],
   MEAS:   [{q: 'MF?', lbl: ['Marker / X dB BW', 'マーカ / X dB 帯域幅'], f: ['freq'], on: () => meta && meta.mkr},
@@ -1109,6 +1132,152 @@ function trackPls(text) {
   if (plsMode) { delete results['PKLST?']; setTimeout(requestOverlay, 1200); }   // list is re-made by the instrument
   if (was !== plsMode) draw();
 }
+// ── peak list panel (computed in the browser) ──────────────────────────────
+// Peaks are found in every captured frame, so the list follows the signal at
+// the frame rate without extra GPIB traffic. A peak is a local maximum that
+// stands out by at least the excursion (dB) above the lowest point on each
+// side before a higher point (= its prominence), and is above the threshold.
+const PL = {mode: 'LEVEL', src: 'A', exc: 6, thr: null, max: 10};
+let plHover = -1, plLabels = true, plList = [], plTabT = 0, plAutoThr = null;
+try { Object.assign(PL, JSON.parse(localStorage.getItem('peakList') || '{}')); } catch (e) {}
+try { plLabels = localStorage.getItem('plsLabels') !== '0'; } catch (e) {}
+function plSave() { try { localStorage.setItem('peakList', JSON.stringify(PL)); } catch (e) {} }
+// instrument peak list (MKR → Peak List, PKLST?): shown only when the browser list is off
+function instPeaks() {
+  const v = results['PKLST?'];
+  if (!plsMode || !v || v.indexOf('ERR') === 0) return [];
+  const lines = v.split('\n'), cnt = parseInt(lines[0], 10) || 0, out = [];
+  for (const l of lines.slice(1, 1 + cnt)) {
+    const [x, y] = l.split(',').map(Number);
+    if (isFinite(x) && Math.abs(x) < 9.99e8 && isFinite(y) && Math.abs(y) < 9.99e8) out.push({x, y});
+  }
+  return out;
+}
+function peaks() { return PL.mode ? plList : instPeaks(); }
+function plSource() {
+  if (PL.src === 'B' && traceB && traceB.length === (trace && trace.length)) return traceB;
+  if (PL.src === 'H' && hold && trace && hold.length === trace.length) return hold;
+  return trace;
+}
+function findPeaks() {
+  const t = plSource();
+  if (!PL.mode || !t || !meta || t.length < 3) { plList = []; return; }
+  const n = t.length, linear = lin(meta);
+  // work in dB so the excursion means the same in linear (W / V) units
+  const k = unitName() === 'W' ? 10 : 20;
+  const d = linear ? Array.from(t, v => v > 0 ? k * Math.log10(v) : -400) : t;
+  // threshold: the value set, or auto = noise floor (median of the trace) + 10 dB
+  let thr;
+  if (PL.thr != null && isFinite(PL.thr)) thr = linear ? (PL.thr > 0 ? k * Math.log10(PL.thr) : -400) : PL.thr;
+  else { const srt = Float32Array.from(d).sort(); thr = srt[srt.length >> 1] + 10; }
+  plAutoThr = PL.thr != null && isFinite(PL.thr) ? null : thr;
+  const exc = Math.max(0, +PL.exc || 0), out = [];
+  for (let i = 0; i < n; i++) {
+    const v = d[i];
+    if (v < thr || (i > 0 && d[i - 1] >= v)) continue;        // rising edge / plateau start only
+    let j = i; while (j + 1 < n && d[j + 1] === v) j++;       // flat top: i … j
+    if (j + 1 < n && d[j + 1] > v) { i = j; continue; }       // still rising
+    let lm = v, a = i - 1; for (; a >= 0 && d[a] <= v; a--) if (d[a] < lm) lm = d[a];
+    let rm = v, b = j + 1; for (; b < n && d[b] <= v; b++) if (d[b] < rm) rm = d[b];
+    // the trace edge counts as a valley (a peak at the edge still has to drop on one side)
+    const prom = v - Math.max(a < 0 ? (i === 0 ? v : lm) : lm, b >= n ? (j === n - 1 ? v : rm) : rm);
+    if (prom >= exc && !(i === 0 && j === n - 1)) {
+      const c = (i + j) >> 1;
+      out.push({i: c, x: zeroSpan() ? (meta.swt || 0) * c / (n - 1) : freqAt(c, n), y: t[c], db: v});
+    }
+    i = j;
+  }
+  out.sort((p, q) => q.db - p.db);
+  plList = out.slice(0, Math.max(1, PL.max | 0));
+  if (PL.mode === 'FREQ') plList.sort((p, q) => p.x - q.x);
+}
+// recompute (and update the table at most 5×/s) when a frame arrives
+function peaksOnFrame() {
+  if (!PL.mode) return;
+  findPeaks();
+  const now = performance.now();
+  if (now - plTabT > 200) { plTabT = now; renderPeaks(); }
+}
+function buildPeaksPanel() {
+  const box = $('pkl');
+  const b = (m, en, ja) => '<button data-pl="' + m + '">' + tr(en, ja) + '</button>';
+  const num = (id, w, ph, hint) => '<input id="' + id + '" type="number" step="any" placeholder="' + ph + '" style="width:' + w + 'px" title="' + hint + '">';
+  box.innerHTML = '<div class="phdr"><div class="sec">' + tr('PEAK LIST', 'ピークリスト') + '</div>' +
+    b('LEVEL', 'Level', 'レベル順') + b('FREQ', 'Freq', '周波数順') + b('OFF', 'Off', 'OFF') + '</div>' +
+    '<div class="phdr" id="pl-ctl">' +
+    '<label>' + tr('Trace', '波形') + ' <select id="pl-src"><option value="A">A</option><option value="B">B</option><option value="H">' + tr('Max hold', 'Max hold') + '</option></select></label>' +
+    '<label>' + tr('Excursion', 'エクスカーション') + ' ' + num('pl-exc', 54, '6', tr('Minimum height above the surrounding valleys (dB)', '周囲の谷からの最小の高さ（dB）')) + ' dB</label>' +
+    '<label>' + tr('Threshold', 'スレッショルド') + ' ' + num('pl-thr', 70, tr('auto', '自動'), tr('Ignore peaks below this level. Empty = auto (noise floor + 10 dB)', 'このレベル未満のピークは無視。空欄 = 自動（ノイズフロア + 10 dB）')) + ' <span id="pl-thu"></span></label>' +
+    '<label>' + tr('Max', '最大') + ' ' + num('pl-max', 52, '10', tr('Number of peaks listed', '一覧するピーク数')) + '</label>' +
+    '<label><input type="checkbox" id="pl-lbl">' + tr('Labels', 'ラベル') + '</label></div>' +
+    '<div id="pl-body"></div>';
+}
+function renderPeaks() {
+  const box = $('pkl'); if (!box) return;
+  if (!$('pl-body')) buildPeaksPanel();
+  for (const bt of box.querySelectorAll('button[data-pl]')) bt.classList.toggle('sel', (PL.mode || 'OFF') === bt.dataset.pl);
+  $('pl-ctl').style.display = PL.mode ? '' : 'none';
+  const setv = (id, v) => { const e = $(id); if (document.activeElement !== e && e.value !== String(v == null ? '' : v)) e.value = v == null ? '' : v; };
+  setv('pl-src', PL.src); setv('pl-exc', PL.exc); setv('pl-thr', PL.thr); setv('pl-max', PL.max);
+  $('pl-thu').textContent = unitName() + (plAutoThr != null && !lin(meta) && isFinite(plAutoThr) ? ' (' + tr('auto ', '自動 ') + trimNum(plAutoThr, 1) + ')' : '');
+  $('pl-lbl').checked = plLabels;
+  const list = plList;
+  // Fixed height: always Max rows (blank rows pad a short list), so the keys
+  // below do not move as the number of peaks changes. Over 10 rows: scroll.
+  const nrow = Math.max(1, PL.max | 0), xs = zeroSpan() ? tr('Time', '時間') : tr('Frequency', '周波数');
+  let msg = '';
+  if (!PL.mode) msg = tr('Off. Choose Level or Freq to list the peaks of the captured trace.', 'OFF。レベル順か周波数順を選ぶと、取り込んだ波形のピークを一覧表示します。');
+  else if (!trace) msg = tr('Waiting for a trace (press Start).', '波形待ち（「開始」を押してください）。');
+  else if (!list.length) msg = tr('No peaks (lower the excursion or the threshold).', 'ピークなし（エクスカーションかスレッショルドを下げてください）。');
+  if (!PL.mode) { $('pl-body').innerHTML = '<div class="pnote">' + msg + '</div>'; return; }
+  const ref = list.length ? list.reduce((a, p) => p.db > a.db ? p : a, list[0]) : null;
+  let body = '';
+  for (let i = 0; i < nrow; i++) {
+    const p = list[i];
+    if (!p) { body += '<tr class="pad"><td>' + (i === 0 && msg ? '' : '&nbsp;') + '</td>' + (i === 0 && msg ? '<td colspan="4" style="text-align:left;color:#64748b;font-family:\'Segoe UI\',Arial,sans-serif">' + msg + '</td>' : '<td></td><td></td><td></td><td></td>') + '</tr>'; continue; }
+    body += '<tr data-i="' + i + '"' + (i === plHover ? ' class="hl"' : '') + '><td>' + (i + 1) + '</td><td>' + fmtMk(p.x) +
+      '</td><td>' + FMT.level(p.y) + '</td><td>' + (p === ref ? '—' : trimNum(p.db - ref.db, 2) + ' dB') +
+      '</td><td>' + (p === ref ? '—' : (p.x > ref.x ? '+' : '') + fmtMk(p.x - ref.x)) + '</td></tr>';
+  }
+  const h = '<div class="pscroll" style="max-height:' + (22 + 20 * 10) + 'px"><table><thead><tr><th>#</th><th>' + xs + '</th><th>' + tr('Level', 'レベル') + '</th><th>' + tr('Δ to max', '最大との差') +
+      '</th><th>' + (zeroSpan() ? 'Δt' : 'Δf') + '</th></tr></thead><tbody>' + body + '</tbody></table></div>' +
+    '<div class="pnote">' + (PL.mode === 'LEVEL' ? tr('Level order', 'レベル順') : tr('Frequency order', '周波数順')) + ' · ' + tr('peaks: ', 'ピーク数 ') + list.length +
+    ' · ' + tr('computed in the browser from every frame', 'ブラウザで毎フレーム検出') + '</div>';
+  // keep the scroll position when redrawing
+  const sc = $('pl-body').querySelector('.pscroll'), top = sc ? sc.scrollTop : 0;
+  $('pl-body').innerHTML = h;
+  if (top) $('pl-body').querySelector('.pscroll').scrollTop = top;
+}
+$('pkl').addEventListener('click', e => {
+  const pb = e.target.closest('button[data-pl]');
+  if (!pb) return;
+  PL.mode = pb.dataset.pl === 'OFF' ? '' : pb.dataset.pl; plSave();
+  plHover = -1; findPeaks(); renderPeaks(); draw();
+});
+// rows: act on mousedown — the table is redrawn with the frames, which would
+// swallow a click whose mousedown and mouseup land on different rows
+$('pkl').addEventListener('mousedown', e => {
+  const tr_ = e.button === 0 && e.target.closest('tbody tr');
+  if (!tr_) return;
+  const p = plList[+tr_.dataset.i]; if (!p) return;
+  sendKey('MK ' + (zeroSpan() ? arg(p.x, 'SC') : arg(Math.round(p.x), 'HZ')));
+});
+$('pkl').addEventListener('change', e => {
+  const id = e.target.id, v = e.target.value;
+  if (id === 'pl-lbl') { plLabels = e.target.checked; try { localStorage.setItem('plsLabels', plLabels ? '1' : '0'); } catch (e2) {} draw(); return; }
+  if (id === 'pl-src') PL.src = v;
+  else if (id === 'pl-exc') PL.exc = v === '' ? 6 : Math.max(0, +v);
+  else if (id === 'pl-thr') PL.thr = v === '' ? null : +v;
+  else if (id === 'pl-max') PL.max = v === '' ? 10 : Math.min(50, Math.max(1, Math.round(+v)));
+  else return;
+  plSave(); findPeaks(); renderPeaks(); draw();
+});
+$('pkl').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.target.blur(); });
+$('pkl').addEventListener('mouseover', e => {
+  const r = e.target.closest('tbody tr'); const i = r ? +r.dataset.i : -1;
+  if (i !== plHover) { plHover = i; draw(); }
+});
+$('pkl').addEventListener('mouseleave', () => { if (plHover >= 0) { plHover = -1; draw(); } });
 function sendKey(text) {
   if (!text) return; trackPls(text);
   if (/^(XYCSR|CSRX|CSRY|SETANC|RLSANC|MKSX|MKSPOS|MKSWID|MKSY|MKSYDL)\b/.test(text.trim())) { clearTimeout(ovSoon); ovSoon = setTimeout(requestOverlay, 700); } $('msg').textContent = ''; send({cmd: 'key', addr: +$('addr').value, text}); stateSoon(); }
@@ -1178,7 +1347,7 @@ function decode(dv, m = meta) {           // 1 tag byte + N x u16 BE
 function onFrame(dv) {
   if (!meta || (dv.byteLength - 1) / 2 !== meta.npts) return;
   const tag = String.fromCharCode(dv.getUint8(0));
-  if (tag === 'B') { traceB = decode(dv); draw(); return; }
+  if (tag === 'B') { traceB = decode(dv); if (PL.src === 'B') peaksOnFrame(); draw(); return; }
   if (tag === 'C') { if (meta2) { trace2 = decode(dv, meta2); drawLower(); } return; }   // lower screen (split)
   const t = decode(dv), n = t.length;
   trace = t;
@@ -1194,6 +1363,7 @@ function onFrame(dv) {
   let pk = 0; for (let i = 1; i < n; i++) if (t[i] > t[pk]) pk = i;
   $('i-pk').textContent = FMT.level(t[pk]) + ' @ ' + fmtX(pk, n);
   updateMarkerInfo();
+  if (PL.src !== 'B') peaksOnFrame();
   draw();
 }
 
@@ -1620,26 +1790,41 @@ function draw() {
     }
     ctx.restore();
   }
-  // peak list markers (PLS FREQ / LEVEL): numbered in the instrument's order
-  if (plsMode && results['PKLST?']) {
-    const lines = results['PKLST?'].split('\n'), cnt = parseInt(lines[0], 10) || 0;
-    let k = 0;
-    ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
-    for (const l of lines.slice(1, 1 + cnt)) {
-      const [x0] = l.split(',').map(Number);
-      if (!isFinite(x0) || Math.abs(x0) >= 9.99e8) continue;
-      k++;
-      const i = zeroSpan() ? (meta.swt > 0 ? Math.round(x0 / meta.swt * (n - 1)) : -1)
-                           : Math.round((x0 - meta.fa) / (meta.fb - meta.fa) * (n - 1));
-      if (i < 0 || i >= n) continue;
-      const x = L + w * i / (n - 1), y = Math.max(T + 22, Math.min(T + h, ys(trace[i])));
-      ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.moveTo(x, y - 3); ctx.lineTo(x - 5, y - 11); ctx.lineTo(x + 5, y - 11); ctx.fill();
-      ctx.fillStyle = 'rgba(15,23,42,.85)'; ctx.fillRect(x - 7, y - 25, 14, 13);
-      ctx.fillStyle = '#fde047'; ctx.fillText(String(k), x, y - 15);
-    }
+  // peak list markers (PLS FREQ / LEVEL): numbered in the instrument's order,
+  // placed at the level the instrument reported (hovered row: highlighted)
+  const pks = peaks();
+  if (pks.length) {
+    const xOf = v => zeroSpan() ? (meta.swt > 0 ? L + v / meta.swt * w : NaN) : (meta.fb > meta.fa ? L + (v - meta.fa) / (meta.fb - meta.fa) * w : NaN);
+    const boxes = [];
+    pks.forEach((p, k) => {
+      const x = xOf(p.x);
+      if (!isFinite(x) || x < L - 1 || x > L + w + 1) return;
+      const y = Math.max(T + 26, Math.min(T + h, ys(p.y))), hl = PL.mode && k === plHover;
+      ctx.fillStyle = hl ? '#ffffff' : '#fde047';
+      ctx.beginPath(); ctx.moveTo(x, y - 2); ctx.lineTo(x - (hl ? 7 : 5), y - (hl ? 13 : 11)); ctx.lineTo(x + (hl ? 7 : 5), y - (hl ? 13 : 11)); ctx.fill();
+      if (hl) {
+        ctx.strokeStyle = 'rgba(253,224,71,.55)'; ctx.setLineDash([3, 3]); ctx.beginPath();
+        ctx.moveTo(x + .5, T); ctx.lineTo(x + .5, T + h); ctx.stroke(); ctx.setLineDash([]);
+      }
+      ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(15,23,42,.85)'; ctx.fillRect(x - 7, y - 27, 14, 13);
+      ctx.fillStyle = hl ? '#ffffff' : '#fde047'; ctx.fillText(String(k + 1), x, y - 17);
+      if ((PL.mode && plLabels) || hl) {          // value label; skipped when it would overlap an earlier one
+        const t = fmtMk(p.x) + '  ' + FMT.level(p.y);
+        ctx.font = (hl ? 'bold ' : '') + '10px sans-serif';
+        const tw = ctx.measureText(t).width, right = x + 10 + tw < L + w;
+        const bx = right ? x + 9 : x - 9 - tw, by = y - 27;
+        if (hl || !boxes.some(q => bx < q[0] + q[2] && q[0] < bx + tw && by < q[1] + 13 && q[1] < by + 13)) {
+          boxes.push([bx, by, tw]);
+          ctx.fillStyle = 'rgba(15,23,42,.8)'; ctx.fillRect(bx - 2, by, tw + 4, 13);
+          ctx.textAlign = 'left'; ctx.fillStyle = hl ? '#ffffff' : '#fef08a'; ctx.fillText(t, bx, by + 10);
+        }
+      }
+    });
     ctx.textAlign = 'right'; ctx.font = '11px sans-serif'; ctx.fillStyle = '#fde047';
-    ctx.fillText(tr('Peak list (', 'ピークリスト（') + (plsMode === 'FREQ' ? tr('freq order', '周波数順') : tr('level order', 'レベル順')) + ')',
-                 L + w - 6, T + (splitOn ? 32 : 14));
+    const ord = (PL.mode || plsMode) === 'FREQ';
+    ctx.fillText(tr('Peak list (', 'ピークリスト（') + (ord ? tr('freq order', '周波数順') : tr('level order', 'レベル順')) +
+                 (PL.mode ? '' : tr(', instrument', '、本体')) + ')', L + w - 6, T + (splitOn ? 32 : 14));
   }
   // mouse cursor
   if (mouseX !== null && mouseX >= L && mouseX <= L + w) {
@@ -1694,15 +1879,7 @@ function extraLines() {
     if (cx != null && cy != null && dx != null && dy != null)
       L.push('# xy_anchor(x_' + xu + ';y_' + u + ';dx;dy),' + (cx - dx) + ',' + (cy - dy) + ',' + dx + ',' + dy);
   }
-  if (plsMode && results['PKLST?']) {
-    const lines = results['PKLST?'].split('\n'), n = parseInt(lines[0], 10) || 0;
-    let k = 0;
-    for (const l of lines.slice(1, 1 + n)) {
-      const [x, y] = l.split(',').map(Number);
-      if (!isFinite(x) || Math.abs(x) >= 9.99e8) continue;
-      L.push('# peak_' + (++k) + '(x_' + xu + ';level_' + u + '),' + x + ',' + y);
-    }
-  }
+  peaks().forEach((p, k) => L.push('# peak_' + (k + 1) + '(x_' + xu + ';level_' + u + '),' + p.x + ',' + p.y));
   return L;
 }
 function saveCSV() {
@@ -1804,7 +1981,7 @@ function clickMarker(offsetX, width) {
 cv.addEventListener('click', e => clickMarker(e.offsetX, cv.clientWidth));
 // PC keyboard: digits, '.', '-', Backspace, Enter (default unit), Esc, arrows
 document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT') return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
   if (/^[0-9]$/.test(e.key)) keyPress(e.key);
   else if (e.key === '.' || e.key === '-') keyPress(e.key);
   else if (e.key === 'Backspace') keyPress('BS');
@@ -1822,6 +1999,7 @@ window.addEventListener('resize', resize);
 if (window.ResizeObserver) { let rw = 0, rh = 0; new ResizeObserver(([e]) => {
   const {width, height} = e.contentRect; if (width !== rw || height !== rh) { rw = width; rh = height; resize(); } }).observe($('wrap')); }
 buildPanel();
+renderPeaks();
 drawKnob();
 $('wfon').checked = wfOn;
 $('wfmode').value = wfMode;
