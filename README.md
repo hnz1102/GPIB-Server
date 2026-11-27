@@ -1,6 +1,7 @@
 <div align="center">
   <h1><code>GPIB Server</code></h1>
   <p>SSH / Web controlled IEEE-488 (GPIB) controller on a single ESP32-S3</p>
+  <img src="doc/box.jpg" alt="GPIB-Server in its 3D-printed case" width="520">
 </div>
 
 # gpib-server — SSH-to-GPIB Bridge for ESP32-S3
@@ -92,7 +93,24 @@ Browser ──[HTTP/WS]──► httpserver.rs ──► gpib.rs
 
 ## Hardware
 
-The schematic is in [`GPIB-Server.kicad_sch`](GPIB-Server.kicad_sch). For the
+<table>
+<tr>
+<td align="center" width="33%"><a href="doc/front.jpg"><img src="doc/front.jpg" alt="GPIB-Server PCB"></a><br><b>PCB</b>: SN75160B / SN75161B transceivers, SN74LVC245A buffers, USB-C, BOOT/CFG button and SSD1306 OLED; the IEEE-488 connector is on the back</td>
+<td align="center" width="33%"><a href="doc/box.jpg"><img src="doc/box.jpg" alt="GPIB-Server in its case"></a><br><b>Case</b> (3D-printed): USB-C power on the left, GPIB connector on the right</td>
+<td align="center" width="33%"><a href="doc/display.jpg"><img src="doc/display.jpg" alt="Mini display"></a><br><b>Mini display</b>: Wi-Fi RSSI, IP address, GPIB address and chip temperature</td>
+</tr>
+</table>
+
+### Case (3D printing)
+
+| File | Part | Size (W × D × H) |
+|------|------|------------------|
+| [`hw/body.stl`](hw/body.stl) | Body | 86 × 67 × 25 mm |
+| [`hw/upper.stl`](hw/upper.stl) | Upper part | 91 × 76 × 27 mm |
+
+Sizes are the bounding boxes of the STL files.
+
+The schematic is in [`hw/GPIB-Server.kicad_sch`](hw/GPIB-Server.kicad_sch) ([PDF](hw/schematic.pdf)). For the
 design rationale (level translation, direction control and pull-ups), see
 [`doc/gpib-hardware.md`](doc/gpib-hardware.md).
 
@@ -160,7 +178,12 @@ gpib-server/
 │   ├── wolfssh/          # wolfSSH (github.com/wolfSSL/wolfssh, commit 157cb01f)
 │   └── wolfssl/          # wolfSSL/wolfCrypt (github.com/wolfSSL/wolfssl, commit b7e7e755)
 ├── doc/gpib-hardware.md  # Hardware design notes (pin list, connections, rules)
-├── GPIB-Server.kicad_sch # Schematic
+├── hw/
+│   ├── GPIB-Server.kicad_* # KiCad project, schematic and PCB
+│   ├── schematic.pdf     # Schematic (PDF)
+│   ├── production/       # Gerber (zip), BOM, positions, netlist for PCB assembly
+│   ├── body.stl          # Case: body (3D printing)
+│   └── upper.stl         # Case: upper part (3D printing)
 ├── static/               # Embedded pages and files (menu, status, spectrum, psu, dmm; xterm.js (gzip) / css / fit addon)
 ├── cfg.toml.example      # Template for cfg.toml (build-time defaults; cfg.toml itself is not in git)
 ├── sdkconfig.defaults    # ESP-IDF build settings
