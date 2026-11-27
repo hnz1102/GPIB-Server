@@ -35,6 +35,31 @@ for the SSH server. It is derived from
 
 ---
 
+## Screenshots
+
+![Spectrum view: ADVANTEST R3267 trace, browser peak list and waterfall](doc/R3267_SA.png)
+
+<table>
+<tr>
+<td align="center" width="50%"><a href="doc/web_menu.png"><img src="doc/web_menu.png" alt="Main menu"></a><br><b>Main menu</b> (<code>/</code>)</td>
+<td align="center" width="50%"><a href="doc/web_terminal.png"><img src="doc/web_terminal.png" alt="GPIB terminal"></a><br><b>GPIB terminal</b> (<code>/terminal</code>)</td>
+</tr>
+<tr>
+<td align="center"><a href="doc/web_psu.png"><img src="doc/web_psu.png" alt="DC power supply page"></a><br><b>DC power supply</b>, HP 6612B (<code>/psu</code>)</td>
+<td align="center"><a href="doc/web_dmm.png"><img src="doc/web_dmm.png" alt="Digital multimeter page"></a><br><b>Digital multimeter</b>, HP 34401A (<code>/dmm</code>)</td>
+</tr>
+<tr>
+<td align="center"><a href="doc/web_status.png"><img src="doc/web_status.png" alt="Status page" width="360"></a><br><b>Status</b> (<code>/status</code>)</td>
+<td align="center"><a href="doc/web_config.png"><img src="doc/web_config.png" alt="Configuration page" width="360"></a><br><b>Configuration</b> (<code>/config</code>)</td>
+</tr>
+<tr>
+<td align="center" colspan="2"><a href="doc/web_login.png"><img src="doc/web_login.png" alt="Login page" width="260"></a><br><b>Login</b> (<code>/login</code>)</td>
+</tr>
+</table>
+
+The power supply and multimeter screenshots were taken with simulated instrument
+replies; the other pages show the live device (Wi-Fi name and passwords replaced).
+
 ## Release History
 
 ### v0.1.0 (gpib-server)
@@ -451,6 +476,8 @@ cat flash_images/app_gpib-server.bin | ssh admin@192.168.0.200 update
 | `/api/boot_log` | GET | Boot history with reset reasons (JSON) |
 | `/api/diag_log` | GET | Diagnostic entries stored in NVS (JSON) |
 
+![Main menu](doc/web_menu.png)
+
 After login the **main menu** opens. Each page (status, spectrum view, power
 supply, configuration, terminal) has a **← Main menu** button that returns to it.
 
@@ -473,6 +500,8 @@ WebSocket messages must carry the login session token. The `/terminal`,
 `/spectrum`, `/psu` and `/dmm` pages embed it, and messages with a missing or wrong token are ignored.
 
 ### Power supply page (`/psu`)
+
+![DC power supply page](doc/web_psu.png)
 
 Controls an **HP / Agilent 6612B** system DC power supply (20 V / 2 A, SCPI) on
 the GPIB bus. Commands follow the Agilent programming guide 5962-8198, which
@@ -517,6 +546,8 @@ Open the page from **DC Power Supply** in the main menu.
 
 ### Multimeter page (`/dmm`)
 
+![Multimeter page](doc/web_dmm.png)
+
 Controls an **HP / Agilent 34401A** 6½-digit multimeter. Commands follow the
 34401A User's Guide, chapter 4 (Remote Interface Reference). The default address
 is **22** (`dmm_addr`); a changed address is saved to NVS. Open the page from
@@ -545,6 +576,8 @@ is **22** (`dmm_addr`); a changed address is saved to NVS. Open the page from
 - The front / rear terminal switch cannot be set over GPIB; the page only shows it.
 
 ### Spectrum view (`/spectrum`)
+
+![Spectrum view](doc/R3267_SA.png)
 
 The page shows a real-time trace from an **ADVANTEST R3267** (R3200-series
 GPIB codes). Enter the GPIB address, CENTER [MHz], SPAN [MHz] and RBW [kHz], then
